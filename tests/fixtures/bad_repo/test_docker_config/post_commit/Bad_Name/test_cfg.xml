@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <environment><os>linux</os><arch>x64</arch></environment>
+  <outputs><report type="tests" format="junit" path="j/*.xml"/></outputs>
+  <execution><main_service>tests</main_service><timeout_minutes>5</timeout_minutes></execution>
+</test_cfg>

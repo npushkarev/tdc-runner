@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  test_cfg.xml schema, contract v1 (IN-662).
+
+  DOCUMENTATION ONLY. Executable validation is tdc/xmlcfg.py (agents are
+  stdlib-only, no XSD validator on the closed network). Rules the code
+  enforces that XSD 1.0 cannot express:
+    - <outputs> must contain at least one <report type="tests">
+      (error "outputs.no_tests_report");
+    - input path legality (no "..", no absolute paths, staged result must
+      stay inside the root) is checked at staging time, not here;
+    - slot_filter is meaningful for <artifact> inputs only; the parser
+      tolerates it on <source> as well.
+  Keep the closed dictionaries below in sync with tdc/model.py
+  (XML_OS_MAP, ARCHES, CAPABILITIES, CONTAINER_TEST_SUITE_TYPES,
+  REPORT_FORMATS).
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <xs:element name="test_cfg">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="meta" type="metaType" minOccurs="0"/>
+        <xs:element name="environment" type="environmentType"/>
+        <xs:element name="inputs" type="inputsType" minOccurs="0"/>
+        <xs:element name="outputs" type="outputsType"/>
+        <xs:element name="execution" type="executionType"/>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="required" fixed="1"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="metaType">
+    <xs:sequence>
+      <xs:element name="description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== environment: where to run (slot matching) ===== -->
+
+  <xs:complexType name="environmentType">
+    <xs:sequence>
+      <xs:element name="os" type="osType"/>
+      <xs:element name="arch" type="archListType"/>
+      <xs:element name="requires" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="capability" type="capabilityType"
+                        minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="osType">
+    <xs:annotation><xs:documentation>
+      XML value; canonical slot os is lin/win (XML_OS_MAP).
+      windows is out of scope for v1: the runner skips such configs.
+    </xs:documentation></xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="linux"/>
+      <xs:enumeration value="windows"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="archTokenType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="x64"/>
+      <xs:enumeration value="arm"/>
+      <xs:enumeration value="arm64"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="archListType">
+    <xs:annotation><xs:documentation>
+      Space-separated list = matrix: the config runs on every matching slot;
+      the current arch reaches compose as TEST_ARCH.
+    </xs:documentation></xs:annotation>
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:list itemType="archTokenType"/>
+      </xs:simpleType>
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="capabilityType">
+    <xs:attribute name="name" use="required">
+      <xs:annotation><xs:documentation>
+        Closed dictionary (model.CAPABILITIES); unknown name is a validation
+        error, not a skip. "slot"-class (docker, docker-compose): absence on
+        the agent fails the build; "config"-class (qemu-user-static):
+        absence is a visible skip.
+      </xs:documentation></xs:annotation>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="docker"/>
+          <xs:enumeration value="docker-compose"/>
+          <xs:enumeration value="qemu-user-static"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="min_version" type="xs:string"/>
+  </xs:complexType>
+
+  <!-- ===== inputs: what enters $TEST_INPUT (default: nothing) ===== -->
+
+  <xs:complexType name="inputsType">
+    <xs:choice minOccurs="0" maxOccurs="unbounded">
+      <xs:element name="artifact">
+        <xs:annotation><xs:documentation>
+          Glob over the published-artifact tree of the build configuration
+          (the only channel for binaries). Matches are then filtered by the
+          current slot's tokens unless slot_filter="false".
+        </xs:documentation></xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="path" type="nonEmptyString" use="required"/>
+          <xs:attribute name="dest" type="nonEmptyString" use="required"/>
+          <xs:attribute name="optional" type="boolType" default="false"/>
+          <xs:attribute name="slot_filter" type="boolType" default="true"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="source">
+        <xs:annotation><xs:documentation>
+          Explicit whitelist of checkout paths; path must start with a
+          literal subdirectory (a bare "**" at the root is rejected at
+          staging).
+        </xs:documentation></xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="path" type="nonEmptyString" use="required"/>
+          <xs:attribute name="dest" type="nonEmptyString" use="required"/>
+          <xs:attribute name="optional" type="boolType" default="false"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:choice>
+  </xs:complexType>
+
+  <!-- ===== outputs: what to collect from $TEST_OUTPUT ===== -->
+
+  <xs:complexType name="outputsType">
+    <xs:annotation><xs:documentation>
+      At least one report with type="tests" is required — enforced by code
+      ("outputs.no_tests_report"), not expressible in XSD 1.0. A glob
+      matching zero files fails the config unless optional="true".
+    </xs:documentation></xs:annotation>
+    <xs:choice minOccurs="1" maxOccurs="unbounded">
+      <xs:element name="report">
+        <xs:complexType>
+          <xs:attribute name="type" type="reportTypeType" use="required"/>
+          <xs:attribute name="format" type="reportFormatType" use="required"/>
+          <xs:attribute name="path" type="nonEmptyString" use="required"/>
+          <xs:attribute name="optional" type="boolType" default="false"/>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="artifact">
+        <xs:complexType>
+          <xs:attribute name="path" type="nonEmptyString" use="required"/>
+          <xs:attribute name="optional" type="boolType" default="false"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:choice>
+  </xs:complexType>
+
+  <xs:simpleType name="reportTypeType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="tests"/>
+      <xs:enumeration value="coverage"/>
+      <xs:enumeration value="static_analysis"/>
+      <xs:enumeration value="custom"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="reportFormatType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="junit"/>
+      <xs:enumeration value="trx"/>
+      <xs:enumeration value="cobertura"/>
+      <xs:enumeration value="raw"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===== execution ===== -->
+
+  <xs:complexType name="executionType">
+    <xs:sequence>
+      <xs:element name="main_service" type="nonEmptyString">
+        <xs:annotation><xs:documentation>
+          Verdict = this service's exit code; must exist in
+          docker-compose.yml (checked against the normalized compose doc).
+        </xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="timeout_minutes" type="xs:positiveInteger">
+        <xs:annotation><xs:documentation>
+          Counted from `up`; image pull happens before and is not included.
+        </xs:documentation></xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===== shared simple types ===== -->
+
+  <xs:simpleType name="nonEmptyString">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="boolType">
+    <xs:annotation><xs:documentation>
+      Strictly "true"/"false" (the parser rejects xs:boolean's "1"/"0").
+    </xs:documentation></xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

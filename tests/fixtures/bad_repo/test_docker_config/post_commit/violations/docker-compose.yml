@@ -1,0 +1,34 @@
+name: fixed-project-name
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fixed-tests
+    restart: always
+    ports:
+      - "8080:80"
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./src:/app/src
+      - cache:/test/input
+    environment:
+      - MODE=bad
+
+  helper:
+    image: docker.io/library/alpine:latest
+    volumes_from:
+      - tests
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://10.0.0.1:514"
+
+volumes:
+  cache:
+    driver_opts:
+      type: none
+      device: /etc
+      o: bind

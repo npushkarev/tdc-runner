@@ -1,0 +1,103 @@
+"""Unit tests for tdc.xmlcfg.parse_test_cfg (stdlib unittest, no docker)."""
+import tempfile
+import unittest
+from pathlib import Path
+
+from tdc.model import ConfigError
+from tdc.xmlcfg import parse_test_cfg
+
+FIXTURES = Path(__file__).parent / "fixtures"
+DEMO_CFG = (FIXTURES / "demo_repo" / "test_docker_config" / "post_commit"
+            / "postgres_integration" / "test_cfg.xml")
+BAD_CFG = (FIXTURES / "bad_repo" / "test_docker_config" / "post_commit"
+           / "violations" / "test_cfg.xml")
+
+VALID_BODY = """<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <environment><os>linux</os><arch>x64</arch></environment>
+  <outputs><report type="tests" format="junit" path="junit/*.xml"/></outputs>
+  <execution><main_service>tests</main_service><timeout_minutes>5</timeout_minutes></execution>
+</test_cfg>
+"""
+
+
+class ParseTestCfgValidTest(unittest.TestCase):
+    def test_demo_fixture_parses(self):
+        cfg = parse_test_cfg(DEMO_CFG)
+        self.assertEqual(cfg.oses, ["lin"])
+        self.assertEqual(cfg.arches, ["x64", "arm64"])
+        self.assertIn("postgres", cfg.description)
+
+        self.assertEqual(len(cfg.inputs), 1)
+        src = cfg.inputs[0]
+        self.assertEqual(src.kind, "source")
+        self.assertEqual(src.path, "tests/data/**")
+        self.assertEqual(src.dest, "data/")
+        self.assertTrue(src.optional)
+        self.assertTrue(src.slot_filter)
+
+        self.assertEqual(len(cfg.reports), 1)
+        rep = cfg.reports[0]
+        self.assertEqual((rep.type, rep.format, rep.path, rep.optional),
+                         ("tests", "junit", "junit/*.xml", False))
+        self.assertEqual(len(cfg.out_artifacts), 1)
+        self.assertEqual(cfg.out_artifacts[0].path, "logs/**")
+        self.assertTrue(cfg.out_artifacts[0].optional)
+
+        self.assertIsNotNone(cfg.execution)
+        self.assertEqual(cfg.execution.main_service, "tests")
+        self.assertEqual(cfg.execution.timeout_minutes, 10)
+        # name is the caller's job; dir defaults to the config directory
+        self.assertEqual(cfg.name, "")
+        self.assertEqual(cfg.dir, DEMO_CFG.parent)
+
+
+class ParseTestCfgErrorsTest(unittest.TestCase):
+    def _parse_text(self, body):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "test_cfg.xml"
+            path.write_text(body, encoding="utf-8")
+            return parse_test_cfg(path)
+
+    def _codes(self, ctx):
+        return {i.code for i in ctx.exception.issues}
+
+    def test_bad_fixture_collects_all_errors(self):
+        with self.assertRaises(ConfigError) as ctx:
+            parse_test_cfg(BAD_CFG)
+        codes = self._codes(ctx)
+        # every violation reported at once, not just the first
+        self.assertLessEqual(
+            {"environment.os_unknown", "environment.arch_unknown",
+             "capability.unknown", "outputs.no_tests_report",
+             "execution.timeout"},
+            codes)
+        self.assertTrue(all(i.severity == "error" for i in ctx.exception.issues))
+
+    def test_broken_xml(self):
+        with self.assertRaises(ConfigError) as ctx:
+            self._parse_text("<test_cfg version='1'><unclosed>")
+        self.assertEqual(self._codes(ctx), {"xml.malformed"})
+
+    def test_unknown_version(self):
+        with self.assertRaises(ConfigError) as ctx:
+            self._parse_text(VALID_BODY.replace('version="1"', 'version="2"'))
+        self.assertIn("cfg.version", self._codes(ctx))
+
+    def test_missing_execution(self):
+        body = VALID_BODY.replace(
+            "<execution><main_service>tests</main_service>"
+            "<timeout_minutes>5</timeout_minutes></execution>", "")
+        with self.assertRaises(ConfigError) as ctx:
+            self._parse_text(body)
+        self.assertIn("execution.missing", self._codes(ctx))
+
+    def test_minimal_valid(self):
+        cfg = self._parse_text(VALID_BODY)
+        self.assertEqual(cfg.oses, ["lin"])
+        self.assertEqual(cfg.execution.timeout_minutes, 5)
+        self.assertEqual(cfg.inputs, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

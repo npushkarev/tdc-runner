@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <meta>
+    <description>OpenIde postgres integration tests (pilot fixture)</description>
+  </meta>
+  <environment>
+    <os>linux</os>
+    <arch>x64 arm64</arch>
+  </environment>
+  <inputs>
+    <source path="tests/data/**" dest="data/" optional="true"/>
+  </inputs>
+  <outputs>
+    <report type="tests" format="junit" path="junit/*.xml"/>
+    <artifact path="logs/**" optional="true"/>
+  </outputs>
+  <execution>
+    <main_service>tests</main_service>
+    <timeout_minutes>10</timeout_minutes>
+  </execution>
+</test_cfg>

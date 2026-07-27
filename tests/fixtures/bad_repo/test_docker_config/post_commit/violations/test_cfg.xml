@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <environment>
+    <os>solaris</os>
+    <arch>sparc</arch>
+    <requires>
+      <capability name="unknown-cap"/>
+    </requires>
+  </environment>
+  <inputs>
+    <artifact path="../../secrets/**" dest="../out"/>
+    <source path="**" dest="all/"/>
+  </inputs>
+  <outputs>
+    <report type="coverage" format="cobertura" path="cov.xml"/>
+  </outputs>
+  <execution>
+    <main_service>absent</main_service>
+    <timeout_minutes>0</timeout_minutes>
+  </execution>
+</test_cfg>

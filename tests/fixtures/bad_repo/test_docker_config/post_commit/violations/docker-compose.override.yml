@@ -1,0 +1,3 @@
+services:
+  tests:
+    privileged: true
