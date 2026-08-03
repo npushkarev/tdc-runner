@@ -30,6 +30,11 @@ print(("%s | %s" % (" ".join(b), s)) if b else "ERROR: %s" % s)' 2>&1)"
 case "$COMPOSE_INFO" in ERROR:*) fail "${COMPOSE_INFO#ERROR: }" ;; esac
 echo "  $(python3 --version 2>&1) | $(docker --version)"
 echo "  compose: $COMPOSE_INFO"
+if [ "$(id -u)" = "0" ]; then
+    echo "  ВНИМАНИЕ: запуск от root. Каталоги отчётов создаст root, и права"
+    echo "  на запись из контейнера под cap_drop: ALL не проверятся. На агенте"
+    echo "  раннер работает от служебного пользователя — прогони и без sudo."
+fi
 
 echo "== [2/5] образ-заглушка из $BASE_IMAGE"
 docker build --build-arg "BASE_IMAGE=$BASE_IMAGE" -t "$STUB_IMAGE" "$SELF" >/dev/null

@@ -28,7 +28,9 @@ run_config(cfg: TestConfig, ctx: RunContext, execute) -> RunResult
          staging.validate_input_spec). Any error issue -> RunResult ERROR
          without touching docker.
       3. staging.stage_inputs into work/staging; output dir work/output
-         (mkdir); collisions/zero-match errors -> ERROR.
+         (mkdir, mode 0777 -- the container drops DAC_OVERRIDE and would not
+         be able to write into a dir owned by the agent user);
+         collisions/zero-match errors -> ERROR.
       4. overridegen.generate_override + write_override into work.
       5. If ctx.dry_run: return RunResult(PASSED, details="dry-run").
       6. compose CMD base: ctx.compose_bin + ("-p", project, "-f", user_file,
@@ -61,6 +63,7 @@ run_slot(ctx: RunContext, execute) -> List[RunResult]
     known config-class caps as present), teamcity suite open/close around
     run_config, aggregate.
 """
+import os
 import re
 import shutil
 import subprocess
@@ -152,6 +155,13 @@ def run_config(cfg, ctx, execute):
     staging_dir.mkdir(parents=True, exist_ok=True)
     output_dir = work / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
+    # The container writes here under cap_drop: ALL, so its root has no
+    # DAC_OVERRIDE and obeys ordinary permission checks. When the runner is not
+    # root (a TC agent runs as a service user), a 0755 dir owned by that user
+    # is unwritable for the container and every report is silently lost.
+    # Confirmed on the dev stand: touch -> "Permission denied", uid 0.
+    # The directory is per-run harness scratch, removed with the build.
+    os.chmod(str(output_dir), 0o777)
     issues.extend(staging.stage_inputs(cfg, ctx, staging_dir))
     if _has_errors(issues):
         return RunResult(cfg.name, ERROR, "staging failed", issues=issues)

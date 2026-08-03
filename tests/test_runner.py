@@ -193,6 +193,15 @@ class RunConfigTest(unittest.TestCase):
         self.assertIn("timeout", result.details)
         self.assertIn("down", execute.verbs())
 
+    def test_output_dir_is_writable_by_the_container(self):
+        # container root runs under cap_drop: ALL -> no DAC_OVERRIDE, so a dir
+        # owned by the (non-root) agent user must be world-writable or every
+        # report is lost. Verified on the dev stand: touch -> Permission denied.
+        self._seed_report()
+        runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        mode = (self.out / "_work" / "demo" / "output").stat().st_mode
+        self.assertEqual(mode & 0o777, 0o777)
+
     def test_cobertura_reports_emit_build_statistics(self):
         self._seed_report()
         cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
