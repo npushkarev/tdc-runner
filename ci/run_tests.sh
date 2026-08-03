@@ -36,8 +36,19 @@ case "$COMPOSE_INFO" in
     ERROR:*) tc_problem "tdc preflight: ${COMPOSE_INFO#ERROR: }"; exit 1 ;;
 esac
 
+# Свободное место на разделе docker'а. Исчерпание диска на агенте выглядит как
+# падение тестов: контейнер БД умирает с "No space left on device" в initdb, а
+# наверх приходит лишь "dependency failed to start" (поймано на dev-стенде).
+DOCKER_ROOT="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker)"
+FREE_MB="$(df -Pm "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+if [ -n "${FREE_MB:-}" ] && [ "$FREE_MB" -lt "${TDC_MIN_FREE_MB:-5120}" ]; then
+    tc_problem "tdc preflight: на $DOCKER_ROOT свободно ${FREE_MB} МБ (нужно минимум ${TDC_MIN_FREE_MB:-5120})"
+    exit 1
+fi
+
 echo "tdc-runner: slot=$SLOT repo=$REPO build_id=$BUILD_ID out=$OUT"
 echo "  $("$PY" --version 2>&1) | $(docker --version) | compose $COMPOSE_INFO"
+echo "  свободно на $DOCKER_ROOT: ${FREE_MB:-?} МБ"
 
 ARGS=(run --mode ci --repo "$REPO" --slot "$SLOT" --out "$OUT" --build-id "$BUILD_ID")
 if [ -n "${TDC_ARTIFACTS:-}" ] && [ -d "${TDC_ARTIFACTS}" ]; then

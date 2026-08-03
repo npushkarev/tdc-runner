@@ -30,6 +30,12 @@ print(("%s | %s" % (" ".join(b), s)) if b else "ERROR: %s" % s)' 2>&1)"
 case "$COMPOSE_INFO" in ERROR:*) fail "${COMPOSE_INFO#ERROR: }" ;; esac
 echo "  $(python3 --version 2>&1) | $(docker --version)"
 echo "  compose: $COMPOSE_INFO"
+DOCKER_ROOT="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker)"
+FREE_MB="$(df -Pm "$DOCKER_ROOT" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
+echo "  свободно на $DOCKER_ROOT: ${FREE_MB:-?} МБ"
+# initdb упирается в диск задолго до наших лимитов; на стенде это уже случалось
+[ -z "${FREE_MB:-}" ] || [ "$FREE_MB" -ge 2048 ] \
+    || fail "мало места на $DOCKER_ROOT (${FREE_MB} МБ): postgres не сможет создать кластер"
 if [ "$(id -u)" = "0" ]; then
     echo "  ВНИМАНИЕ: запуск от root. Каталоги отчётов создаст root, и права"
     echo "  на запись из контейнера под cap_drop: ALL не проверятся. На агенте"
