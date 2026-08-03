@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <meta>
+    <!-- ЗАМЕНИТЬ -->
+    <description>Интеграционные тесты my_component (gtest)</description>
+  </meta>
+
+  <environment>
+    <os>linux</os>
+    <arch>x64</arch>
+  </environment>
+
+  <inputs>
+    <!-- ЗАМЕНИТЬ: какие файлы из артефактов сборки положить внутрь.
+         path — маска по дереву артефактов, dest — куда внутри /test/input -->
+    <artifact path="**/tests/**" dest="bin/"/>
+  </inputs>
+
+  <outputs>
+    <!-- пути считаются от /test/output -->
+    <report type="tests" format="junit" path="results/*.xml"/>
+  </outputs>
+
+  <execution>
+    <main_service>tests</main_service>
+    <timeout_minutes>15</timeout_minutes>
+  </execution>
+</test_cfg>

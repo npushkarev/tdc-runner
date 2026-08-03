@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <meta>
+    <!-- ЗАМЕНИТЬ: одна строка о том, что это за набор -->
+    <description>Интеграционные тесты My.Component</description>
+  </meta>
+
+  <environment>
+    <os>linux</os>
+    <arch>x64</arch>
+  </environment>
+
+  <outputs>
+    <!-- пути считаются от /test/output -->
+    <report type="tests" format="trx" path="results/**/*.trx"/>
+    <report type="coverage" format="cobertura"
+            path="results/*/coverage.cobertura.xml" optional="true"/>
+  </outputs>
+
+  <execution>
+    <main_service>tests</main_service>
+    <!-- ЗАМЕНИТЬ, если ваши тесты идут дольше -->
+    <timeout_minutes>20</timeout_minutes>
+  </execution>
+</test_cfg>

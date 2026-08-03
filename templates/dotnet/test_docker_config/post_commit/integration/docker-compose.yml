@@ -1,0 +1,23 @@
+# ШАБЛОН .NET. Заменить всё, что помечено ЗАМЕНИТЬ, остальное оставить как есть.
+services:
+  tests:
+    # ЗАМЕНИТЬ: образ с вашими собранными тестами (собирается отдельной
+    # конфигурацией сборки и публикуется в ProGet; тег — конкретный, не latest)
+    image: proget.inc.elara.local/FEED/my-component-tests:1.0.0
+    command:
+      - dotnet
+      - test
+      # ЗАМЕНИТЬ: путь к вашему тест-проекту внутри образа
+      - ./tests/My.Component.IntegrationTests/My.Component.IntegrationTests.csproj
+      - --filter
+      # ЗАМЕНИТЬ: как у вас помечены интеграционные тесты
+      - Category=Integration
+      - --no-build
+      - -c
+      - Release
+      # дальше не трогать: это то, что выносит отчёты наружу
+      - --logger
+      - trx;LogFileName=integration.trx
+      - --collect:XPlat Code Coverage
+      - --results-directory
+      - /test/output/results

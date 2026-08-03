@@ -1,0 +1,11 @@
+# ШАБЛОН C++ (gtest). Заменить всё, что помечено ЗАМЕНИТЬ.
+services:
+  tests:
+    # ЗАМЕНИТЬ: образ с рантаймом, в котором запускаются ваши бинарники
+    image: proget.inc.elara.local/FEED/gcc84-runtime:1.0.0
+    working_dir: /test/input/bin
+    command:
+      # ЗАМЕНИТЬ: имя вашего тестового бинарника
+      - ./my_component_tests
+      # дальше не трогать: так gtest пишет отчёт туда, откуда его заберут
+      - --gtest_output=xml:/test/output/results/gtest.xml
