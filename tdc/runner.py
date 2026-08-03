@@ -187,10 +187,17 @@ def run_config(cfg, ctx, execute):
     details = ""
     try:
         # 3.4-3.5: pull outside the timeout, up, wait on the main container
-        execute(base + ["pull"])
+        pull = execute(base + ["pull"])
         up = execute(base + ["up", "-d"])
         if up.returncode != 0:
-            details = "up failed (rc=%d)" % up.returncode
+            # `up` writes the actual cause (missing image, registry auth, bad
+            # mount) to stderr; without it "rc=1" sends people digging blind.
+            details = "up failed (rc=%d): %s" % (
+                up.returncode, _last_line(up.stderr) or "no stderr")
+            if pull.returncode != 0:
+                details += " | pull rc=%d: %s" % (
+                    pull.returncode, _last_line(pull.stderr) or "no stderr")
+            _write_infra_text(ctx, cfg, "up-stderr.txt", up.stderr, pull.stderr)
         else:
             cid = (execute(base + ["ps", "-q", main_service]).stdout or "").strip()
             if not cid:
@@ -215,6 +222,19 @@ def run_config(cfg, ctx, execute):
         finally:
             execute(base + ["down", "-v", "--remove-orphans"])
     return RunResult(cfg.name, status, details, issues=issues)
+
+
+def _last_line(text):
+    """Most informative single line of a compose failure (docker is chatty)."""
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    return lines[-1] if lines else ""
+
+
+def _write_infra_text(ctx, cfg, name, *chunks):
+    infra = ctx.output_root / "reports" / cfg.name / INFRA_REPORT_DIR
+    infra.mkdir(parents=True, exist_ok=True)
+    body = "\n".join(c for c in chunks if c)
+    (infra / name).write_text(body, encoding="utf-8")
 
 
 def _collect(cfg, ctx, base, execute, output_dir, issues, status):

@@ -20,18 +20,21 @@ from tdc.model import (
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-def _proc(stdout="", returncode=0):
+def _proc(stdout="", returncode=0, stderr=""):
     return types.SimpleNamespace(returncode=returncode, stdout=stdout,
-                                 stderr="")
+                                 stderr=stderr)
 
 
 class FakeExecute(object):
     """Records commands; answers `compose ps -q` and `docker wait`."""
 
-    def __init__(self, wait_stdout="0\n", wait_exc=None):
+    def __init__(self, wait_stdout="0\n", wait_exc=None, up_rc=0,
+                 up_stderr=""):
         self.calls = []
         self.wait_stdout = wait_stdout
         self.wait_exc = wait_exc
+        self.up_rc = up_rc
+        self.up_stderr = up_stderr
 
     def __call__(self, cmd, **kw):
         cmd = list(cmd)
@@ -42,6 +45,8 @@ class FakeExecute(object):
             return _proc(self.wait_stdout)
         if len(cmd) >= 3 and cmd[-3:-1] == ["ps", "-q"]:
             return _proc("cid123\n")
+        if cmd[-2:] == ["up", "-d"]:
+            return _proc(returncode=self.up_rc, stderr=self.up_stderr)
         if cmd[-3:] == ["logs", "--no-color", "-t"]:
             return _proc("LOGLINE\n")
         if cmd[-2:] == ["ps", "-a"]:
@@ -168,6 +173,20 @@ class RunConfigTest(unittest.TestCase):
         infra = self.out / "reports" / "demo" / "_infra"
         self.assertEqual((infra / "compose-logs.txt").read_text(), "LOGLINE\n")
         self.assertTrue((infra / "compose-ps.txt").is_file())
+
+    def test_up_failure_reports_the_reason(self):
+        # "up failed (rc=1)" alone sends people digging; docker already said why
+        stderr = ("time=... level=warning msg=...\n"
+                  "Error response from daemon: pull access denied for "
+                  "proget.inc.elara.local/main/library/postgres:18.1\n")
+        execute = FakeExecute(up_rc=1, up_stderr=stderr)
+        result = runner.run_config(self.cfg, self.ctx, execute)
+        self.assertEqual(result.status, FAILED)
+        self.assertIn("pull access denied", result.details)
+        # full stderr kept as evidence next to the other infra files
+        saved = (self.out / "reports" / "demo" / "_infra" / "up-stderr.txt")
+        self.assertIn("Error response from daemon", saved.read_text())
+        self.assertIn("down", execute.verbs())  # cleanup still runs
 
     def test_nonzero_wait_exit_failed(self):
         execute = FakeExecute(wait_stdout="1\n")
