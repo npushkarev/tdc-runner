@@ -226,6 +226,27 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual([c[0][0] for c in self.import_data.call_args_list],
                          ["junit"])
 
+    def test_duplicate_cobertura_counted_once(self):
+        # VSTest writes the same report under results/<guid>/ and again into
+        # the attachment dir; a wider glob catches both and used to double
+        # every counter (seen with coverlet 8.0.1 on a real dotnet run).
+        self._seed_report()
+        body = ('<coverage lines-covered="26" lines-valid="27" '
+                'branches-covered="5" branches-valid="10"/>')
+        for sub in ("guid", "_host_2026_08_03/In/host"):
+            d = self.out / "_work" / "demo" / "output" / "coverage" / sub
+            d.mkdir(parents=True)
+            (d / "coverage.cobertura.xml").write_text(body, encoding="utf-8")
+        self.cfg.reports.append(ReportSpec(
+            type="coverage", format="cobertura",
+            path="coverage/**/coverage.cobertura.xml"))
+        with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
+            runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        emitted = {c[0][0]: c[0][1] for c in stat.call_args_list}
+        self.assertEqual(emitted["CodeCoverageAbsLCovered"], 26)  # not 52
+        self.assertEqual(emitted["CodeCoverageAbsLTotal"], 27)
+        self.assertEqual(emitted["CodeCoverageL"], 96.3)
+
     def test_malformed_cobertura_does_not_break_collection(self):
         self._seed_report()
         cov_dir = self.out / "_work" / "demo" / "output" / "coverage"

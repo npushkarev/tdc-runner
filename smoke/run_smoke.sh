@@ -92,9 +92,15 @@ if [ "$NEGATIVE" = "1" ]; then
 fi
 
 [ "$RC" = "0" ] || fail "прогон вернул $RC (лог: $SELF/.last.log)"
-ls "$R"/tests/results/*.trx >/dev/null 2>&1 || fail "не собран trx"
-ls "$R"/coverage/results/*.cobertura.xml >/dev/null 2>&1 || fail "не собран cobertura"
+[ -n "$(find "$R/tests" -name '*.trx' 2>/dev/null)" ] || fail "не собран trx"
+COV_COUNT="$(find "$R/coverage" -name '*.cobertura.xml' 2>/dev/null | wc -l | tr -d ' ')"
+[ "$COV_COUNT" -ge 1 ] || fail "не собран cobertura"
+# глоб профиля обязан взять отчёт из results/<guid>/, а не копию из вложений
+[ "$COV_COUNT" = "1" ] || fail "собрано $COV_COUNT cobertura-файлов вместо одного"
 grep -q "importData type='mstest'" "$SELF/.last.log" || fail "нет importData для trx"
 grep -q "CodeCoverageL" "$SELF/.last.log" || fail "нет статистики покрытия"
+# дубль отчёта из каталога вложений не должен удваивать счётчики
+grep -q "key='CodeCoverageAbsLCovered' value='150'" "$SELF/.last.log" \
+    || fail "счётчики покрытия не сошлись (дубль посчитан дважды?)"
 echo "SMOKE: ОК — отчёты собраны, импорт и статистика отправлены, агент чист"
 echo "  отчёты: $R"

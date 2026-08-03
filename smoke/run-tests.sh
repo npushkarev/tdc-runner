@@ -26,11 +26,16 @@ cat > "$RESULTS/integration.trx" <<'TRX'
 </TestRun>
 TRX
 
-cat > "$RESULTS/coverage.cobertura.xml" <<'COV'
-<?xml version="1.0" encoding="UTF-8"?>
+# Раскладка как у настоящего VSTest: отчёт в results/<guid>/, плюс его копия
+# в каталоге вложений. Дубль намеренный — ядро обязано посчитать покрытие один
+# раз, а не удвоить (проверено на реальном прогоне dotnet с coverlet 8.0.1).
+COV_XML='<?xml version="1.0" encoding="UTF-8"?>
 <coverage line-rate="0.75" branch-rate="0.5"
           lines-covered="150" lines-valid="200"
-          branches-covered="20" branches-valid="40"/>
-COV
+          branches-covered="20" branches-valid="40"/>'
+mkdir -p "$RESULTS/3f8b599e-ed2b-42e6-b428-f10187562474" \
+         "$RESULTS/_stub_2026_08_03/In/stub"
+echo "$COV_XML" > "$RESULTS/3f8b599e-ed2b-42e6-b428-f10187562474/coverage.cobertura.xml"
+echo "$COV_XML" > "$RESULTS/_stub_2026_08_03/In/stub/coverage.cobertura.xml"
 
-echo "stub-tests: wrote $(ls "$RESULTS" | tr '\n' ' ')"
+echo "stub-tests: wrote $(find "$RESULTS" -type f | wc -l) file(s)"

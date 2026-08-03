@@ -63,6 +63,7 @@ run_slot(ctx: RunContext, execute) -> List[RunResult]
     known config-class caps as present), teamcity suite open/close around
     run_config, aggregate.
 """
+import hashlib
 import os
 import re
 import shutil
@@ -269,10 +270,24 @@ _COVERAGE_STATS = (("lines", "L"), ("branches", "B"))
 
 
 def _emit_coverage_stats(paths):
-    """Cobertura has no TC importer: publish counters as build statistics."""
+    """Cobertura has no TC importer: publish counters as build statistics.
+
+    VSTest writes the coverage file twice -- once under results/<guid>/ and
+    once into the attachment dir results/_<host>_<date>/In/<host>/ -- so a
+    glob over the results tree yields duplicates that would double every
+    counter. Identical files are counted once (observed with coverlet 8.0.1).
+    """
     totals = {kind: [0, 0] for kind, _ in _COVERAGE_STATS}  # covered, valid
     seen = False
+    digests = set()
     for path in paths:
+        try:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        if digest in digests:
+            continue
+        digests.add(digest)
         try:
             root = ElementTree.parse(str(path)).getroot()
         except (ElementTree.ParseError, OSError):

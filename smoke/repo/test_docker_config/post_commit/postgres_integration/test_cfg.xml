@@ -14,7 +14,9 @@
 
   <outputs>
     <report type="tests" format="trx" path="results/**/*.trx"/>
-    <report type="coverage" format="cobertura" path="results/**/coverage.cobertura.xml" optional="true"/>
+    <!-- VSTest дублирует файл в каталог вложений (results/_<host>_<date>/In/...),
+       поэтому глоб ровно на один уровень, а не ** -->
+    <report type="coverage" format="cobertura" path="results/*/coverage.cobertura.xml" optional="true"/>
     <!-- Snapshooter кладёт .mismatch рядом со снапшотами только при расхождении -->
     <report type="snapshots" format="raw" path="snapshots/**" optional="true"/>
     <artifact path="logs/**" optional="true"/>
