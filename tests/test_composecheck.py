@@ -1,12 +1,10 @@
 """Tests for tdc.composecheck: pure unit checks on hand-built normalized
 documents, fixture scans, and one docker-gated 'compose config' integration."""
-import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from tdc import composecheck
+from tdc import composebin, composecheck
 from tdc.model import DEFAULT_REGISTRY_PREFIXES
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -174,19 +172,10 @@ class ListComposeFilesTest(unittest.TestCase):
         self.assertEqual([], composecheck.list_compose_files(DEMO_CFG))
 
 
-def _has_compose_v2():
-    """docker on PATH is not enough: the compose v2 plugin may be missing."""
-    if not shutil.which("docker"):
-        return False
-    try:
-        return subprocess.run(["docker", "compose", "version"],
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL).returncode == 0
-    except OSError:
-        return False
+COMPOSE_BIN, COMPOSE_SOURCE = composebin.resolve()
 
 
-@unittest.skipUnless(_has_compose_v2(), "docker compose v2 unavailable")
+@unittest.skipUnless(COMPOSE_BIN, "no compose available: %s" % COMPOSE_SOURCE)
 class NormalizeComposeIntegrationTest(unittest.TestCase):
     def test_normalize_then_check(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -194,7 +183,7 @@ class NormalizeComposeIntegrationTest(unittest.TestCase):
             env_file.write_text("POSTGRES_USER=t\nPOSTGRES_PASSWORD=t\n",
                                 encoding="utf-8")
             doc = composecheck.normalize_compose(
-                DEMO_CFG, env_file, ("docker", "compose"))
+                DEMO_CFG, env_file, COMPOSE_BIN)
         self.assertIsInstance(doc, dict)
         self.assertEqual({"postgres", "tests"},
                          set(doc.get("services", {})))

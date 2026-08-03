@@ -22,7 +22,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import composecheck, envfile, overridegen, runner, slots, staging
+from . import (composebin, composecheck, envfile, overridegen, runner,
+               slots, staging)
 from .model import (
     COMPOSE_FILE_NAME, CONFIG_DIR_ROOT, DEFAULT_REGISTRY_PREFIXES,
     ENV_DEFAULT_NAME, TRIGGER_CLASSES, ConfigError, RunContext, RunResult,
@@ -35,18 +36,6 @@ def _execute(cmd, **kw):
     kw.setdefault("stderr", subprocess.PIPE)
     kw.setdefault("universal_newlines", True)
     return subprocess.run(cmd, **kw)
-
-
-def _has_compose_v2():
-    """`docker` on PATH says nothing about the compose v2 plugin being there."""
-    if shutil.which("docker") is None:
-        return False
-    try:
-        return subprocess.run(["docker", "compose", "version"],
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL).returncode == 0
-    except OSError:
-        return False
 
 
 def _registry_prefixes(args):
@@ -69,8 +58,8 @@ def _validate_static(config_dir, cfg):
     return issues
 
 
-def _validate_compose(config_dir, cfg, prefixes):
-    """Normalize via `docker compose config` and run the whitelist."""
+def _validate_compose(config_dir, cfg, prefixes, compose_bin):
+    """Normalize via the resolved compose CLI and run the whitelist."""
     env = {}
     env_path = config_dir / ENV_DEFAULT_NAME
     if env_path.is_file():
@@ -87,7 +76,7 @@ def _validate_compose(config_dir, cfg, prefixes):
             env_file.write_text(envfile.render_env_file(merged),
                                 encoding="utf-8")
             doc = composecheck.normalize_compose(config_dir, env_file,
-                                                 ("docker", "compose"))
+                                                 compose_bin)
         main = cfg.execution.main_service if cfg.execution else ""
         return composecheck.check_compose(doc, main, prefixes,
                                           config_dir=config_dir)
@@ -98,7 +87,8 @@ def _validate_compose(config_dir, cfg, prefixes):
 def _cmd_validate(args):
     repo = Path(args.repo).resolve()
     prefixes = _registry_prefixes(args)
-    use_docker = not args.no_docker and _has_compose_v2()
+    compose_bin, source = composebin.resolve()
+    use_docker = not args.no_docker and compose_bin is not None
     failed = False
     total = 0
     for trigger in TRIGGER_CLASSES:
@@ -112,7 +102,7 @@ def _cmd_validate(args):
                 compose_cfg = cfg or TestConfig(name=config_dir.name,
                                                 dir=config_dir)
                 issues.extend(_validate_compose(config_dir, compose_cfg,
-                                                prefixes))
+                                                prefixes, compose_bin))
             label = "%s/%s" % (trigger, config_dir.name)
             if not issues:
                 print("%s: OK" % label)
@@ -121,11 +111,11 @@ def _cmd_validate(args):
             if any(i.severity == "error" for i in issues):
                 failed = True
     if use_docker:
-        note = ""
+        note = " (compose: %s)" % source
     elif args.no_docker:
         note = " (compose checks skipped: --no-docker)"
     else:
-        note = " (compose checks skipped: docker compose v2 unavailable)"
+        note = " (compose checks skipped: %s)" % source
     print("validated %d config(s)%s" % (total, note))
     return 1 if failed else 0
 
@@ -139,6 +129,11 @@ def _cmd_run(args):
     if args.mode == "local" and not args.config:
         print("tdc: --mode local requires --config", file=sys.stderr)
         return 2
+    compose_bin, source = composebin.resolve()
+    if compose_bin is None and not args.dry_run:
+        print("tdc: %s" % source, file=sys.stderr)
+        return 2
+    print("tdc: compose = %s (%s)" % (" ".join(compose_bin or ()), source))
     ci_env = {}
     for name in ("BUILD_NUMBER", "VCS_REVISION"):
         if name in os.environ:
@@ -158,6 +153,8 @@ def _cmd_run(args):
         registry_prefixes=_registry_prefixes(args),
         dry_run=args.dry_run,
     )
+    if compose_bin is not None:
+        ctx.compose_bin = tuple(compose_bin)
     ctx.output_root.mkdir(parents=True, exist_ok=True)
     if args.mode == "local":
         config_dir = (ctx.repo_root / CONFIG_DIR_ROOT / TRIGGER_CLASSES[0]

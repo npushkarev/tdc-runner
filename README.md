@@ -36,6 +36,13 @@ python3 -m unittest discover -s tests
 Интеграционные кейсы (реальный `docker compose config`, без контейнеров)
 включаются автоматически при наличии docker.
 
+## Compose
+
+Ставить compose на машину не нужно: пин версии лежит в `vendor/compose/`
+и выбирается автоматически (`tdc/composebin.py`), системный плагин —
+запасной путь, `TDC_COMPOSE_BIN` — override. Подробности и как добавить
+другую архитектуру — `vendor/compose/README.md`.
+
 ## Смоук на реальном docker
 
 Юниты не поднимают контейнеров. Сквозной прогон — `smoke/`: собирает
@@ -47,6 +54,6 @@ python3 -m unittest discover -s tests
 ./smoke/run_smoke.sh --negative   # ожидается FAILED: без <privileges> postgres не стартует
 ```
 
-Предусловия проверяет сам скрипт: python3, docker-демон, compose v2.
+Предусловия проверяет сам скрипт: python3, docker-демон, compose.
 `SMOKE_BASE_IMAGE` подменяет базовый образ, если ProGet недоступен
 (например на маке: `SMOKE_BASE_IMAGE=postgres:17-alpine`).

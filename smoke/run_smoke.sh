@@ -24,8 +24,12 @@ fail() { echo "SMOKE: ПРОВАЛ — $1" >&2; exit 1; }
 echo "== [1/5] предусловия"
 command -v python3 >/dev/null || fail "python3 не найден"
 docker info >/dev/null 2>&1 || fail "docker-демон недоступен"
-docker compose version >/dev/null 2>&1 || fail "docker compose v2 не установлен"
-echo "  $(python3 --version 2>&1) | $(docker --version) | compose $(docker compose version --short)"
+COMPOSE_INFO="$(cd "$ROOT" && python3 -c 'from tdc import composebin
+b, s = composebin.resolve()
+print(("%s | %s" % (" ".join(b), s)) if b else "ERROR: %s" % s)' 2>&1)"
+case "$COMPOSE_INFO" in ERROR:*) fail "${COMPOSE_INFO#ERROR: }" ;; esac
+echo "  $(python3 --version 2>&1) | $(docker --version)"
+echo "  compose: $COMPOSE_INFO"
 
 echo "== [2/5] образ-заглушка из $BASE_IMAGE"
 docker build --build-arg "BASE_IMAGE=$BASE_IMAGE" -t "$STUB_IMAGE" "$SELF" >/dev/null

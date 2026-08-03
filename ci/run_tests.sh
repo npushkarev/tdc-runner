@@ -27,12 +27,17 @@ fi
 if ! docker info >/dev/null 2>&1; then
     tc_problem "tdc preflight: docker daemon unavailable on agent"; exit 1
 fi
-if ! docker compose version >/dev/null 2>&1; then
-    tc_problem "tdc preflight: docker compose v2 not installed on agent"; exit 1
-fi
+# compose берётся из vendor/compose (пин контракта); системный плагин —
+# запасной путь. Требовать плагин на агенте больше не нужно.
+COMPOSE_INFO="$(cd "$SELF" && "$PY" -c 'from tdc import composebin
+b, s = composebin.resolve()
+print(("%s | %s" % (" ".join(b), s)) if b else "ERROR: %s" % s)' 2>&1)"
+case "$COMPOSE_INFO" in
+    ERROR:*) tc_problem "tdc preflight: ${COMPOSE_INFO#ERROR: }"; exit 1 ;;
+esac
 
 echo "tdc-runner: slot=$SLOT repo=$REPO build_id=$BUILD_ID out=$OUT"
-echo "  $("$PY" --version 2>&1) | $(docker --version) | compose $(docker compose version --short 2>/dev/null || echo '?')"
+echo "  $("$PY" --version 2>&1) | $(docker --version) | compose $COMPOSE_INFO"
 
 ARGS=(run --mode ci --repo "$REPO" --slot "$SLOT" --out "$OUT" --build-id "$BUILD_ID")
 if [ -n "${TDC_ARTIFACTS:-}" ] && [ -d "${TDC_ARTIFACTS}" ]; then
