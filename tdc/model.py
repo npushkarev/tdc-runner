@@ -52,7 +52,16 @@ ALLOWED_SERVICE_KEYS = {
 # Container label marking everything we start (orphan sweep key).
 HARNESS_LABEL = "tc.in662"
 
-CONTAINER_TEST_SUITE_TYPES = ("tests", "coverage", "static_analysis", "custom")
+# Capabilities a config may ask back after cap_drop: ALL. Closed dictionary:
+# enough for images that set up their own data dir on first start (postgres
+# initdb, mysql, rabbitmq), nothing that grants host reach.
+ALLOWED_CAP_ADD = ("CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL",
+                   "SETGID", "SETUID", "NET_BIND_SERVICE")
+
+# Report types are an OPEN dictionary (ticket p.4): known values below drive
+# import/statistics, anything else is published as an artifact with a warning.
+CONTAINER_TEST_SUITE_TYPES = ("tests", "coverage", "static_analysis",
+                              "snapshots", "custom")
 REPORT_FORMATS = ("junit", "trx", "cobertura", "raw")
 INFRA_REPORT_DIR = "_infra"
 
@@ -113,6 +122,10 @@ class TestConfig:
     reports: List[ReportSpec] = field(default_factory=list)
     out_artifacts: List[OutputArtifactSpec] = field(default_factory=list)
     execution: Optional[Execution] = None
+    # service name -> capabilities added back after cap_drop: ALL (ALLOWED_CAP_ADD)
+    cap_add: Dict[str, List[str]] = field(default_factory=dict)
+    # non-fatal findings from parsing (open dictionaries); load_config surfaces them
+    warnings: List["ValidationIssue"] = field(default_factory=list)
 
     def matches_slot(self, slot: Slot) -> bool:
         return slot.os in self.oses and slot.arch in self.arches

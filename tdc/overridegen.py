@@ -16,6 +16,9 @@ generate_override(doc: dict, cfg: TestConfig, ctx: RunContext,
       - limits: pids_limit, mem_limit, memswap_limit(=mem_limit), cpus,
         cap_drop: [ALL], security_opt: [no-new-privileges:true]
         from ctx.limits.
+      - cap_add: only what cfg.cap_add declares for that service (parsed from
+        <privileges>, closed dictionary) — images like postgres cannot run
+        initdb under a bare cap_drop: ALL.
       - labels: {HARNESS_LABEL: "1"}.
       - restart: "no" for every service except cfg.execution.main_service
         keeps whatever compose default is (do NOT add restart to main).
@@ -76,6 +79,10 @@ def generate_override(doc, cfg, ctx, staging_dir, output_dir):
         }
         if name != main_service:
             service["restart"] = "no"
+        # declared in test_cfg.xml, validated against the closed dictionary
+        caps = cfg.cap_add.get(name)
+        if caps:
+            service["cap_add"] = list(caps)
         services[name] = service
     return {
         "services": services,

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Универсальная пускалка тестов test_docker_config для TC-шаблона (IN-662).
+# Один и тот же шаг билда для любого компонента и любого слота; вся
+# параметризация — через окружение (задаётся шаблоном TC):
+#   TDC_SLOT              слот вида lin-x64 (шаблон: env.TDC_SLOT = %slot.os%-%slot.arch%)
+#   TDC_ARTIFACTS         каталог скачанных артефактов сборки (artifact dependency)
+#   TDC_OUT               куда класть отчёты (публикуется артефактами билда)
+#   TDC_REPO              корень checkout'а тестируемого репо (дефолт: текущий каталог)
+#   TDC_BUILD_ID          уникальный id рана для compose project name
+#                         (дефолт: BUILD_NUMBER от TC, иначе "local")
+#   TDC_REGISTRY_PREFIXES разрешённые префиксы registry через пробел (опционально)
+#   TDC_EXTRA_ARGS        дополнительные аргументы tdc run (например --dry-run)
+set -euo pipefail
+
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # корень tdc-runner
+REPO="${TDC_REPO:-$(pwd)}"
+SLOT="${TDC_SLOT:-lin-x64}"
+OUT="${TDC_OUT:-$REPO/.tdc-out}"
+BUILD_ID="${TDC_BUILD_ID:-${BUILD_NUMBER:-local}}"
+
+tc_problem() { echo "##teamcity[buildProblem description='$1']"; }
+
+PY="$(command -v python3 || true)"
+if [ -z "$PY" ]; then
+    tc_problem "tdc preflight: python3 not found on agent"; exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    tc_problem "tdc preflight: docker daemon unavailable on agent"; exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+    tc_problem "tdc preflight: docker compose v2 not installed on agent"; exit 1
+fi
+
+echo "tdc-runner: slot=$SLOT repo=$REPO build_id=$BUILD_ID out=$OUT"
+echo "  $("$PY" --version 2>&1) | $(docker --version) | compose $(docker compose version --short 2>/dev/null || echo '?')"
+
+ARGS=(run --mode ci --repo "$REPO" --slot "$SLOT" --out "$OUT" --build-id "$BUILD_ID")
+if [ -n "${TDC_ARTIFACTS:-}" ] && [ -d "${TDC_ARTIFACTS}" ]; then
+    ARGS+=(--artifacts "$TDC_ARTIFACTS")
+fi
+for p in ${TDC_REGISTRY_PREFIXES:-}; do
+    ARGS+=(--registry-prefix "$p")
+done
+if [ -n "${TDC_EXTRA_ARGS:-}" ]; then
+    # осознанное word-splitting: TDC_EXTRA_ARGS — список аргументов
+    # shellcheck disable=SC2086
+    set -- ${TDC_EXTRA_ARGS}
+    ARGS+=("$@")
+fi
+
+exec env PYTHONPATH="$SELF" "$PY" -m tdc "${ARGS[@]}"

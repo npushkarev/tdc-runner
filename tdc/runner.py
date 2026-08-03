@@ -44,7 +44,8 @@ run_config(cfg: TestConfig, ctx: RunContext, execute) -> RunResult
          FAILED), copy into ctx.output_root/reports/<cfg.name>/<type>/;
          `compose logs --no-color -t` + `compose ps -a` into
          .../reports/<cfg.name>/_infra/; emit teamcity.import_data for
-         junit ("junit") and trx ("mstest") reports;
+         junit ("junit") and trx ("mstest") reports; cobertura has no TC
+         importer -> counters go out as build statistics;
          `compose down -v --remove-orphans`.
     Return RunResult.
 
@@ -64,6 +65,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from xml.etree import ElementTree
 
 from .model import (
     CONFIG_DIR_ROOT, CONFIG_NAME_RE, COMPOSE_FILE_NAME, ENV_DEFAULT_NAME,
@@ -108,6 +110,7 @@ def load_config(config_dir):
             cfg = xmlcfg.parse_test_cfg(cfg_path)
             cfg.name = config_dir.name
             cfg.dir = config_dir
+            issues.extend(cfg.warnings)
         except ConfigError as exc:
             issues.extend(exc.issues)
     return cfg, issues
@@ -206,6 +209,7 @@ def run_config(cfg, ctx, execute):
 def _collect(cfg, ctx, base, execute, output_dir, issues, status):
     """Reports + infra diagnostics into ctx.output_root/reports/<cfg.name>/."""
     reports_root = ctx.output_root / "reports" / cfg.name
+    coverage_files = []
     for spec in cfg.reports:
         matches = sorted(p for p in output_dir.glob(spec.path) if p.is_file())
         if not matches and not spec.optional:
@@ -224,6 +228,9 @@ def _collect(cfg, ctx, base, execute, output_dir, issues, status):
                 teamcity.import_data("junit", str(dest))
             elif spec.format == "trx":
                 teamcity.import_data("mstest", str(dest))
+            elif spec.format == "cobertura":
+                coverage_files.append(dest)
+    _emit_coverage_stats(coverage_files)
     for spec in cfg.out_artifacts:
         matches = sorted(p for p in output_dir.glob(spec.path) if p.is_file())
         if not matches and not spec.optional:
@@ -246,6 +253,39 @@ def _collect(cfg, ctx, base, execute, output_dir, issues, status):
     ps = execute(base + ["ps", "-a"])
     (infra / "compose-ps.txt").write_text(ps.stdout or "", encoding="utf-8")
     return status
+
+
+_COVERAGE_STATS = (("lines", "L"), ("branches", "B"))
+
+
+def _emit_coverage_stats(paths):
+    """Cobertura has no TC importer: publish counters as build statistics."""
+    totals = {kind: [0, 0] for kind, _ in _COVERAGE_STATS}  # covered, valid
+    seen = False
+    for path in paths:
+        try:
+            root = ElementTree.parse(str(path)).getroot()
+        except (ElementTree.ParseError, OSError):
+            continue
+        for kind, _ in _COVERAGE_STATS:
+            try:
+                covered = int(root.get("%s-covered" % kind))
+                valid = int(root.get("%s-valid" % kind))
+            except (TypeError, ValueError):
+                continue
+            totals[kind][0] += covered
+            totals[kind][1] += valid
+            seen = True
+    if not seen:
+        return
+    for kind, suffix in _COVERAGE_STATS:
+        covered, valid = totals[kind]
+        if not valid:
+            continue
+        teamcity.build_statistic("CodeCoverageAbs%sCovered" % suffix, covered)
+        teamcity.build_statistic("CodeCoverageAbs%sTotal" % suffix, valid)
+        teamcity.build_statistic("CodeCoverage%s" % suffix,
+                                 round(100.0 * covered / valid, 2))
 
 
 def sweep_orphans(execute, docker_bin):

@@ -1,0 +1,33 @@
+# Смоук-профиль: копия MVP-профиля OpenIde (IN-662/mvp/openide_repo), где вместо
+# настоящего тестового образа стоит заглушка из smoke/Dockerfile. Всё остальное —
+# обвязка, healthcheck, переменные — один в один, чтобы смоук проверял ту же схему.
+services:
+  tests:
+    image: proget.inc.elara.local/test-images/tdc-smoke-tests:${TESTS_IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - READ_DB
+      - WRITE_DB
+
+  postgres:
+    image: proget.inc.elara.local/main/library/postgres:18.1
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres-test-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-test-data:

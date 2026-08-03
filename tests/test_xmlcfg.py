@@ -92,6 +92,43 @@ class ParseTestCfgErrorsTest(unittest.TestCase):
             self._parse_text(body)
         self.assertIn("execution.missing", self._codes(ctx))
 
+    def test_unknown_report_type_is_a_warning_not_an_error(self):
+        # open dictionary (ticket p.4): unknown type still reaches collection
+        body = VALID_BODY.replace(
+            '<report type="tests" format="junit" path="junit/*.xml"/>',
+            '<report type="tests" format="junit" path="junit/*.xml"/>'
+            '<report type="fuzzing" format="raw" path="fuzz/**"/>')
+        cfg = self._parse_text(body)
+        self.assertEqual([r.type for r in cfg.reports], ["tests", "fuzzing"])
+        self.assertEqual([i.code for i in cfg.warnings],
+                         ["outputs.report_type_unknown"])
+
+    def test_snapshots_is_a_known_type(self):
+        body = VALID_BODY.replace(
+            '<report type="tests" format="junit" path="junit/*.xml"/>',
+            '<report type="tests" format="junit" path="junit/*.xml"/>'
+            '<report type="snapshots" format="raw" path="__snapshots__/**"/>')
+        cfg = self._parse_text(body)
+        self.assertEqual(cfg.warnings, [])
+
+    def test_privileges_cap_add_parsed(self):
+        body = VALID_BODY.replace(
+            "<execution>",
+            '<privileges><service name="postgres" '
+            'cap_add="CHOWN SETUID SETGID"/></privileges><execution>')
+        cfg = self._parse_text(body)
+        self.assertEqual(cfg.cap_add,
+                         {"postgres": ["CHOWN", "SETUID", "SETGID"]})
+
+    def test_privileges_cap_outside_dictionary_is_an_error(self):
+        body = VALID_BODY.replace(
+            "<execution>",
+            '<privileges><service name="postgres" '
+            'cap_add="CHOWN SYS_ADMIN"/></privileges><execution>')
+        with self.assertRaises(ConfigError) as ctx:
+            self._parse_text(body)
+        self.assertIn("privileges.cap_unknown", self._codes(ctx))
+
     def test_minimal_valid(self):
         cfg = self._parse_text(VALID_BODY)
         self.assertEqual(cfg.oses, ["lin"])

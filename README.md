@@ -35,3 +35,18 @@ python3 -m unittest discover -s tests
 
 Интеграционные кейсы (реальный `docker compose config`, без контейнеров)
 включаются автоматически при наличии docker.
+
+## Смоук на реальном docker
+
+Юниты не поднимают контейнеров. Сквозной прогон — `smoke/`: собирает
+образ-заглушку из postgres в ProGet (сеть наружу не нужна), гоняет профиль,
+копирующий пилотный MVP-профиль OpenIde, и проверяет критерии готовности.
+
+```sh
+./smoke/run_smoke.sh              # ожидается PASSED: trx + cobertura + чистый агент
+./smoke/run_smoke.sh --negative   # ожидается FAILED: без <privileges> postgres не стартует
+```
+
+Предусловия проверяет сам скрипт: python3, docker-демон, compose v2.
+`SMOKE_BASE_IMAGE` подменяет базовый образ, если ProGet недоступен
+(например на маке: `SMOKE_BASE_IMAGE=postgres:17-alpine`).

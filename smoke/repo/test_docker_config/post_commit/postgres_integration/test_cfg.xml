@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <meta>
+    <description>OpenIde backend: интеграционные тесты слоя Infrastructure на PostgreSQL</description>
+  </meta>
+
+  <environment>
+    <os>linux</os>
+    <arch>x64</arch>
+  </environment>
+
+  <!-- Входов нет: тестовый образ самодостаточен (publish-бандл вкомпилен в него
+       сборочной конфигурацией). Появятся, когда бандл начнут подавать артефактом. -->
+
+  <outputs>
+    <report type="tests" format="trx" path="results/**/*.trx"/>
+    <report type="coverage" format="cobertura" path="results/**/coverage.cobertura.xml" optional="true"/>
+    <!-- Snapshooter кладёт .mismatch рядом со снапшотами только при расхождении -->
+    <report type="snapshots" format="raw" path="snapshots/**" optional="true"/>
+    <artifact path="logs/**" optional="true"/>
+  </outputs>
+
+  <!-- postgres initdb создаёт свой data-каталог при первом старте:
+       под голым cap_drop: ALL контейнер не поднимется -->
+  <privileges>
+    <service name="postgres" cap_add="CHOWN DAC_OVERRIDE FOWNER SETGID SETUID"/>
+  </privileges>
+
+  <execution>
+    <main_service>tests</main_service>
+    <timeout_minutes>20</timeout_minutes>
+  </execution>
+</test_cfg>

@@ -25,6 +25,7 @@
         <xs:element name="environment" type="environmentType"/>
         <xs:element name="inputs" type="inputsType" minOccurs="0"/>
         <xs:element name="outputs" type="outputsType"/>
+        <xs:element name="privileges" type="privilegesType" minOccurs="0"/>
         <xs:element name="execution" type="executionType"/>
       </xs:sequence>
       <xs:attribute name="version" type="xs:string" use="required" fixed="1"/>
@@ -163,12 +164,39 @@
     </xs:choice>
   </xs:complexType>
 
+  <!-- ===== privileges: managed relaxation of cap_drop: ALL ===== -->
+
+  <xs:complexType name="privilegesType">
+    <xs:annotation><xs:documentation>
+      The harness drops every capability. Images that set up their own data
+      directory on first start (postgres initdb and friends) need a few back.
+      This is a contract parameter with a CLOSED dictionary, not free-form
+      cap_add in the compose file: CHOWN, DAC_OVERRIDE, FOWNER, FSETID, KILL,
+      SETGID, SETUID, NET_BIND_SERVICE. Anything else -> "privileges.cap_unknown".
+    </xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="service" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name" type="xs:string" use="required"/>
+          <xs:attribute name="cap_add" type="xs:string" use="required"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
   <xs:simpleType name="reportTypeType">
+    <xs:annotation>
+      <xs:documentation>
+      Open dictionary (ticket p.4 — «список может расширяться»). Known values
+      drive import/statistics: tests, coverage, static_analysis, snapshots,
+      custom. Anything else is collected and published as an artifact, with a
+      warning ("outputs.report_type_unknown") — not an error, so the XSD must
+      not restrict it either.
+      </xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
-      <xs:enumeration value="tests"/>
-      <xs:enumeration value="coverage"/>
-      <xs:enumeration value="static_analysis"/>
-      <xs:enumeration value="custom"/>
+      <xs:minLength value="1"/>
+      <xs:pattern value="[a-z0-9_]+"/>
     </xs:restriction>
   </xs:simpleType>
 

@@ -193,6 +193,46 @@ class RunConfigTest(unittest.TestCase):
         self.assertIn("timeout", result.details)
         self.assertIn("down", execute.verbs())
 
+    def test_cobertura_reports_emit_build_statistics(self):
+        self._seed_report()
+        cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
+        cov_dir.mkdir(parents=True)
+        for name, covered in (("a.xml", 30), ("b.xml", 10)):
+            (cov_dir / name).write_text(
+                '<coverage lines-covered="%d" lines-valid="100" '
+                'branches-covered="5" branches-valid="20"/>' % covered,
+                encoding="utf-8")
+        self.cfg.reports.append(ReportSpec(type="coverage",
+                                           format="cobertura",
+                                           path="coverage/*.xml"))
+        with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
+            runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        emitted = {c[0][0]: c[0][1] for c in stat.call_args_list}
+        # counters summed across files, percentage derived from the totals
+        self.assertEqual(emitted["CodeCoverageAbsLCovered"], 40)
+        self.assertEqual(emitted["CodeCoverageAbsLTotal"], 200)
+        self.assertEqual(emitted["CodeCoverageL"], 20.0)
+        self.assertEqual(emitted["CodeCoverageB"], 25.0)  # (5+5)/(20+20)
+        # cobertura has no TC importer -> no importData for it
+        self.assertEqual([c[0][0] for c in self.import_data.call_args_list],
+                         ["junit"])
+
+    def test_malformed_cobertura_does_not_break_collection(self):
+        self._seed_report()
+        cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
+        cov_dir.mkdir(parents=True)
+        (cov_dir / "broken.xml").write_text("<coverage", encoding="utf-8")
+        self.cfg.reports.append(ReportSpec(type="coverage",
+                                           format="cobertura",
+                                           path="coverage/*.xml"))
+        with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
+            result = runner.run_config(self.cfg, self.ctx,
+                                       FakeExecute(wait_stdout="0\n"))
+        self.assertEqual(result.status, PASSED)
+        stat.assert_not_called()
+        self.assertTrue((self.out / "reports" / "demo" / "coverage"
+                         / "coverage" / "broken.xml").is_file())
+
     def test_dry_run_no_docker_commands(self):
         self.ctx.dry_run = True
         execute = FakeExecute()

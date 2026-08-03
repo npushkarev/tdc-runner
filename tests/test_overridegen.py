@@ -82,6 +82,16 @@ class GenerateOverrideTest(unittest.TestCase):
             self.assertEqual(svc["cap_drop"], ["ALL"])
             self.assertEqual(svc["security_opt"], ["no-new-privileges:true"])
 
+    def test_cap_add_only_where_declared(self):
+        cfg = make_cfg()
+        cfg.cap_add = {"postgres": ["CHOWN", "SETUID"]}
+        override = overridegen.generate_override(
+            DOC, cfg, make_ctx(), self.staging, self.output)
+        postgres = override["services"]["postgres"]
+        self.assertEqual(postgres["cap_add"], ["CHOWN", "SETUID"])
+        self.assertEqual(postgres["cap_drop"], ["ALL"])  # drop stays, add is on top
+        self.assertNotIn("cap_add", override["services"]["tests"])
+
     def test_harness_label(self):
         for name in ("tests", "postgres"):
             self.assertEqual(self.override["services"][name]["labels"],

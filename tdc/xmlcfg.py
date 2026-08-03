@@ -13,6 +13,12 @@ parse_test_cfg(path: Path) -> TestConfig
       <artifact path= [optional=]/>. type in CONTAINER_TEST_SUITE_TYPES,
       format in REPORT_FORMATS. At least one report type="tests" required
       -> error "outputs.no_tests_report" otherwise.
+    - <outputs> report type is an OPEN dictionary: unknown -> warning
+      "outputs.report_type_unknown", still collected (published as artifact).
+      Warnings ride on TestConfig.warnings; only errors raise ConfigError.
+    - <privileges>: <service name= cap_add="CHOWN SETUID"/> — capabilities
+      given back after the harness cap_drop: ALL. Names from ALLOWED_CAP_ADD
+      (closed dictionary) else error "privileges.cap_unknown".
     - <execution>: <main_service> (non-empty) and <timeout_minutes> (int > 0)
       both required.
     - Collect ALL problems into ConfigError(issues) rather than failing on
@@ -22,8 +28,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from .model import (
-    ARCHES, CAPABILITIES, CONTAINER_TEST_SUITE_TYPES, REPORT_FORMATS,
-    XML_OS_MAP, Capability, ConfigError, Execution, InputSpec,
+    ALLOWED_CAP_ADD, ARCHES, CAPABILITIES, CONTAINER_TEST_SUITE_TYPES,
+    REPORT_FORMATS, XML_OS_MAP, Capability, ConfigError, Execution, InputSpec,
     OutputArtifactSpec, ReportSpec, TestConfig, ValidationIssue,
 )
 
@@ -32,6 +38,10 @@ SCHEMA_VERSION = "1"
 
 def _err(issues, code, message):
     issues.append(ValidationIssue("error", code, message))
+
+
+def _warn(issues, code, message):
+    issues.append(ValidationIssue("warning", code, message))
 
 
 def _parse_bool(value, default, issues, code, where):
@@ -106,10 +116,10 @@ def _parse_outputs(outputs, cfg, issues):
                 _err(issues, "outputs.attr_missing", "<report> requires type=, format= and path=")
                 ok = False
             if rtype and rtype not in CONTAINER_TEST_SUITE_TYPES:
-                _err(issues, "outputs.report_type",
-                     "unknown report type %r (allowed: %s)"
-                     % (rtype, ", ".join(CONTAINER_TEST_SUITE_TYPES)))
-                ok = False
+                _warn(issues, "outputs.report_type_unknown",
+                      "unknown report type %r, published as an artifact "
+                      "(known: %s)"
+                      % (rtype, ", ".join(CONTAINER_TEST_SUITE_TYPES)))
             if rformat and rformat not in REPORT_FORMATS:
                 _err(issues, "outputs.report_format",
                      "unknown report format %r (allowed: %s)"
@@ -130,6 +140,28 @@ def _parse_outputs(outputs, cfg, issues):
             cfg.out_artifacts.append(OutputArtifactSpec(path, optional))
         else:
             _err(issues, "outputs.unknown_element", "unexpected <%s> in <outputs>" % el.tag)
+
+
+def _parse_privileges(privileges, cfg, issues):
+    for el in privileges:
+        if el.tag != "service":
+            _err(issues, "privileges.unknown_element",
+                 "unexpected <%s> in <privileges>" % el.tag)
+            continue
+        name = (el.get("name") or "").strip()
+        if not name:
+            _err(issues, "privileges.attr_missing", "<service> requires name=")
+            continue
+        caps = []
+        for cap in (el.get("cap_add") or "").split():
+            if cap not in ALLOWED_CAP_ADD:
+                _err(issues, "privileges.cap_unknown",
+                     "capability %r not allowed for %r (closed dictionary: %s)"
+                     % (cap, name, ", ".join(ALLOWED_CAP_ADD)))
+                continue
+            caps.append(cap)
+        if caps:
+            cfg.cap_add.setdefault(name, []).extend(caps)
 
 
 def _parse_execution(execution, cfg, issues):
@@ -191,12 +223,18 @@ def parse_test_cfg(path):
         _err(issues, "outputs.no_tests_report",
              'at least one <report type="tests"> is required')
 
+    privileges = root.find("privileges")
+    if privileges is not None:
+        _parse_privileges(privileges, cfg, issues)
+
     execution = root.find("execution")
     if execution is None:
         _err(issues, "execution.missing", "<execution> is required")
     else:
         _parse_execution(execution, cfg, issues)
 
-    if issues:
+    errors = [i for i in issues if i.severity == "error"]
+    if errors:
         raise ConfigError(issues)
+    cfg.warnings = issues
     return cfg
