@@ -5,3 +5,5 @@ staging/
 reports/
 smoke/.out/
 smoke/.last.log
+smoke/.out-openide/
+smoke/.last-openide.log

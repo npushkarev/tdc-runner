@@ -1,0 +1,57 @@
+# MVP-профиль IN-662 для SCADA/elara_openide_backend — набор postgres-integration.
+# Источник: postgres-integration-tests-compose.yaml из корня их репо, приведённый
+# к белому списку контракта. Отличия от оригинала и почему:
+#   - build: -> image: тестовый образ собирается отдельной конфигурацией TC и
+#     публикуется в ProGet; тест-агент исходники не собирает (и не получает).
+#   - container_name: убран — имена даёт compose project name (уникален на ран).
+#   - restart: always убран — под тестовый прогон это вечный рестарт упавшей базы.
+#   - command: добавлен — оригинальный CMD образа не выгружает отчёты наружу.
+#     Пути берём из инжекта ядра (TEST_OUTPUT=/test/output).
+#   - POSTGRES_HOST/PORT заданы явно: environment сервиса перебивает .env,
+#     запечённый в bin/ (CopyToOutputDirectory=Always), — см. приоритет
+#     источников в статье Confluence pageId=119770782.
+
+services:
+  tests:
+    image: proget.inc.elara.local/test-images/openide-postgres-integration-tests:${TESTS_IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Testing
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - READ_DB
+      - WRITE_DB
+    command:
+      - dotnet
+      - test
+      - --filter
+      - Category=Integration&DbProvider=Npgsql
+      - --no-build
+      - -c
+      - Release
+      - --logger
+      - trx;LogFileName=integration.trx
+      - --collect:XPlat Code Coverage
+      - --results-directory
+      - /test/output/results
+
+  postgres:
+    image: proget.inc.elara.local/main/library/postgres:18.1
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres-test-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-test-data:
