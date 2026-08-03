@@ -37,6 +37,18 @@ def _execute(cmd, **kw):
     return subprocess.run(cmd, **kw)
 
 
+def _has_compose_v2():
+    """`docker` on PATH says nothing about the compose v2 plugin being there."""
+    if shutil.which("docker") is None:
+        return False
+    try:
+        return subprocess.run(["docker", "compose", "version"],
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode == 0
+    except OSError:
+        return False
+
+
 def _registry_prefixes(args):
     return DEFAULT_REGISTRY_PREFIXES + tuple(args.registry_prefix or ())
 
@@ -86,7 +98,7 @@ def _validate_compose(config_dir, cfg, prefixes):
 def _cmd_validate(args):
     repo = Path(args.repo).resolve()
     prefixes = _registry_prefixes(args)
-    use_docker = not args.no_docker and shutil.which("docker") is not None
+    use_docker = not args.no_docker and _has_compose_v2()
     failed = False
     total = 0
     for trigger in TRIGGER_CLASSES:
@@ -108,8 +120,13 @@ def _cmd_validate(args):
                 print("%s: %s" % (label, issue))
             if any(i.severity == "error" for i in issues):
                 failed = True
-    print("validated %d config(s)%s"
-          % (total, "" if use_docker else " (compose checks skipped)"))
+    if use_docker:
+        note = ""
+    elif args.no_docker:
+        note = " (compose checks skipped: --no-docker)"
+    else:
+        note = " (compose checks skipped: docker compose v2 unavailable)"
+    print("validated %d config(s)%s" % (total, note))
     return 1 if failed else 0
 
 
