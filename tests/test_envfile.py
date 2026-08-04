@@ -25,7 +25,9 @@ class ParseEnvFileTest(unittest.TestCase):
 
     def test_demo_repo_fixture(self):
         self.assertEqual(parse_env_file(DEMO_ENV),
-                         {"POSTGRES_USER": "test", "POSTGRES_PASSWORD": "test"})
+                         {"POSTGRES_USER": "test", "POSTGRES_PASSWORD": "test",
+                          "READ_DB": "openide_read",
+                          "WRITE_DB": "openide"})
 
     def test_empty_file(self):
         self.assertEqual(parse_env_file(EMPTY_ENV), {})

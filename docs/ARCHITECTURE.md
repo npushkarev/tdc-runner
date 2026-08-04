@@ -242,7 +242,7 @@ TeamCity работает не от root — значит каталог отч�
 python3 -m unittest discover -s tests    # проверка ядра, контейнеры не поднимаются
 ./smoke/run_smoke.sh                     # сквозной прогон на заглушке
 ./smoke/run_smoke.sh --negative          # проверка, что защита работает
-./smoke/run_openide.sh <путь к checkout> # настоящие тесты пилота
+./smoke/run_openide.sh <checkout> <профиль>  # настоящие тесты пилота
 ```
 
 Результат каждого прогона — каталог `reports/<конфигурация>/` с результатами

@@ -1,15 +1,19 @@
+# Смоук-профиль: копия MVP-профиля OpenIde (IN-662/mvp/openide_repo), где вместо
+# настоящего тестового образа стоит заглушка из smoke/Dockerfile. Всё остальное —
+# обвязка, healthcheck, переменные — один в один, чтобы смоук проверял ту же схему.
 services:
   tests:
-    image: proget.inc.elara.local/test-images/openide-postgres-tests:1.0
+    image: proget.inc.elara.local/test-images/tdc-smoke-tests:1.0.0
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      - ASPNETCORE_ENVIRONMENT=Testing
       - POSTGRES_USER
       - POSTGRES_PASSWORD
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - READ_DB
+      - WRITE_DB
 
   postgres:
     image: proget.inc.elara.local/main/library/postgres:18.1

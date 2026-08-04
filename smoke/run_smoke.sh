@@ -54,20 +54,17 @@ if [ "$BASE_IMAGE" != "$PG_IMAGE" ]; then
     echo "  алиас $BASE_IMAGE -> $PG_IMAGE (только локально, не пушится)"
 fi
 
-REPO="$SELF/repo"
+# Гоняем на КОПИИ канонического профиля (tests/fixtures/demo_repo): один и тот же
+# пример проверяется и юнит-тестами, и настоящим прогоном, а негативный режим
+# больше не правит отслеживаемые файлы.
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+cp -R "$ROOT/tests/fixtures/demo_repo/." "$WORK/"
+REPO="$WORK"
 CFG="$REPO/test_docker_config/post_commit/postgres_integration/test_cfg.xml"
-RESTORE=""
 if [ "$NEGATIVE" = "1" ]; then
-    RESTORE="$(mktemp)"; cp "$CFG" "$RESTORE"
-    trap 'cp "$RESTORE" "$CFG"; rm -f "$RESTORE"' EXIT
-    python3 - "$CFG" <<'PY'
-import re, sys
-p = sys.argv[1]
-t = open(p, encoding='utf-8').read()
-open(p, 'w', encoding='utf-8').write(
-    re.sub(r'\n  <!-- postgres initdb.*?</privileges>\n', '\n', t, flags=re.S))
-PY
-    echo "  негативный режим: <privileges> временно убран"
+    python3 -c "import re,sys;p=sys.argv[1];t=open(p,encoding='utf-8').read();open(p,'w',encoding='utf-8').write(re.sub(r'\n  <!-- postgres initdb.*?</privileges>\n','\n',t,flags=re.S))" "$CFG"
+    echo "  негативный режим: <privileges> убран в копии профиля"
 fi
 
 echo "== [3/5] валидация профиля"

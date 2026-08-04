@@ -25,7 +25,7 @@ class ParseTestCfgValidTest(unittest.TestCase):
     def test_demo_fixture_parses(self):
         cfg = parse_test_cfg(DEMO_CFG)
         self.assertEqual(cfg.oses, ["lin"])
-        self.assertEqual(cfg.arches, ["x64", "arm64"])
+        self.assertEqual(cfg.arches, ["x64"])
         self.assertIn("postgres", cfg.description)
 
         self.assertEqual(len(cfg.inputs), 1)
@@ -36,17 +36,20 @@ class ParseTestCfgValidTest(unittest.TestCase):
         self.assertTrue(src.optional)
         self.assertTrue(src.slot_filter)
 
-        self.assertEqual(len(cfg.reports), 1)
-        rep = cfg.reports[0]
-        self.assertEqual((rep.type, rep.format, rep.path, rep.optional),
-                         ("tests", "junit", "junit/*.xml", False))
+        # тот же профиль реально гоняется смоуком, поэтому набор отчётов боевой
+        self.assertEqual([(r.type, r.format) for r in cfg.reports],
+                         [("tests", "trx"), ("coverage", "cobertura"),
+                          ("snapshots", "raw")])
         self.assertEqual(len(cfg.out_artifacts), 1)
         self.assertEqual(cfg.out_artifacts[0].path, "logs/**")
         self.assertTrue(cfg.out_artifacts[0].optional)
+        self.assertEqual(cfg.cap_add,
+                         {"postgres": ["CHOWN", "DAC_OVERRIDE", "FOWNER",
+                                       "SETGID", "SETUID"]})
 
         self.assertIsNotNone(cfg.execution)
         self.assertEqual(cfg.execution.main_service, "tests")
-        self.assertEqual(cfg.execution.timeout_minutes, 10)
+        self.assertEqual(cfg.execution.timeout_minutes, 20)
         # name is the caller's job; dir defaults to the config directory
         self.assertEqual(cfg.name, "")
         self.assertEqual(cfg.dir, DEMO_CFG.parent)

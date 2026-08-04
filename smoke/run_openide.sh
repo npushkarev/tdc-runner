@@ -4,7 +4,10 @@
 # и внутренний NuGet-фид. Образ собирается локально и в ProGet не публикуется —
 # для проверки достаточно локального тега.
 #
-#   ./smoke/run_openide.sh /path/to/elara_openide_backend
+#   ./smoke/run_openide.sh <путь к checkout> <путь к каталогу профиля>
+#
+# Профиль конкретной команды в этом репозитории не хранится — передайте путь
+# к каталогу, внутри которого лежит test_docker_config/.
 #
 # Предварительно (шаг 3 инструкции Голубевой, pageId=119770782):
 #   в корне checkout'а должен лежать iw-proxy-root.crt — его забирает COPY *.crt.
@@ -15,11 +18,13 @@ ROOT="$(cd "$SELF/.." && pwd)"
 REPO="${1:-}"
 OUT="${OPENIDE_OUT:-$SELF/.out-openide}"
 IMAGE="proget.inc.elara.local/test-images/openide-postgres-integration-tests:1.0.0"
-PROFILE="$SELF/openide_profile/test_docker_config"
+PROFILE_ROOT="${2:-}"
 
 fail() { echo "OPENIDE: ПРОВАЛ — $1" >&2; exit 1; }
 
 [ -n "$REPO" ] || fail "укажи путь к checkout'у elara_openide_backend"
+[ -n "$PROFILE_ROOT" ] || [ -d "$REPO/test_docker_config" ] \
+    || fail "укажи вторым аргументом каталог с профилем (test_docker_config/)"
 [ -d "$REPO/tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests" ] \
     || fail "$REPO не похож на elara_openide_backend"
 [ -n "$(find "$REPO" -maxdepth 1 -name '*.crt')" ] \
@@ -32,12 +37,10 @@ docker build \
 echo "  собран $IMAGE"
 
 echo "== [2/4] профиль в checkout"
-if [ -d "$PROFILE" ]; then
-    cp -r "$PROFILE" "$REPO/"
-    echo "  скопирован из $PROFILE"
+if [ -n "$PROFILE_ROOT" ]; then
+    cp -r "$PROFILE_ROOT/test_docker_config" "$REPO/"
+    echo "  скопирован из $PROFILE_ROOT"
 else
-    [ -d "$REPO/test_docker_config" ] \
-        || fail "профиль не найден: положи test_docker_config/ в $REPO вручную"
     echo "  используется уже лежащий в репозитории"
 fi
 
