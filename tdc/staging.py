@@ -101,7 +101,7 @@ def stage_inputs(cfg, ctx, staging_dir):
             if ctx.artifacts_root is None:
                 issues.append(ValidationIssue(
                     "error", "inputs.no_artifacts",
-                    "artifact input %r: run has no artifacts root" % spec.path))
+                    "artifact input %r: не указан каталог артефактов. Локально — ./run_local.sh <набор> --artifacts <каталог со сборкой>; в CI — переменная TDC_ARTIFACTS" % spec.path))
                 continue
             root = Path(ctx.artifacts_root)
         else:
