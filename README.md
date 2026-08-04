@@ -21,11 +21,18 @@ python3 -m tdc run --mode local --repo <repo_root> --config <name> \
     --slot lin-x64 --artifacts <dir> --out <dir> [--dry-run]
 ```
 
-Контракт репозитория (`test_docker_config/post_commit/<name>/` с
-`docker-compose.yml` + `.env.default` + `test_cfg.xml`), белый список
-compose-полей и регламент выходных артефактов — в
-`docs/confluence_article_draft.md`; формат манифеста — `docs/test_cfg.xsd`
-(документация; исполняемая валидация — код).
+## Документация
+
+| Кому | Что читать |
+|---|---|
+| разработчику компонента | **[docs/HOWTO.md](docs/HOWTO.md)** — как подключить свои тесты: маршрут из четырёх шагов, готовые шаблоны в `templates/`, рецепты и разбор ошибок |
+| тому, кто принимает решения | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — устройство, обоснования, что уже проверено, границы и открытые вопросы |
+| при работе с контрактом | `docs/test_cfg.xsd` — формат манифеста (документация; исполняемая валидация — код) |
+| для статьи-регламента | `docs/confluence_article_draft.md` |
+
+Схемы — `docs/in662_*.png`, рядом лежат редактируемые `.excalidraw` и генераторы
+(`diagen.py` + `make_diagrams.py` для архитектурных, `in662_howto_overview.py`
+для обзорной).
 
 ## Тесты
 
