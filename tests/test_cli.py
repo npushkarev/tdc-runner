@@ -1,11 +1,13 @@
 """Smoke tests for tdc.cli (no docker: lower modules mocked)."""
 import contextlib
 import io
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from tdc import cli
+from tdc.cli import main
 from tdc.model import Execution, ReportSpec, TestConfig
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -46,6 +48,34 @@ class CliValidateSmokeTest(unittest.TestCase):
                               str(FIXTURES / "bad_repo"), "--no-docker"])
         self.assertEqual(rc, 1)
         self.assertIn("config.bad_name", out)
+
+
+class RunMissingConfigTest(unittest.TestCase):
+    """Опечатка в имени набора не должна выглядеть как падение ядра."""
+
+    def _run(self, name, repo):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = main(["run", "--repo", str(repo), "--slot", "lin-x64",
+                       "--mode", "local", "--config", name,
+                       "--out", str(self.out), "--dry-run"])
+        return rc, err.getvalue()
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.out = Path(self._tmp.name) / "out"
+
+    def test_unknown_config_lists_available(self):
+        rc, err = self._run("integration", FIXTURES / "demo_repo")
+        self.assertEqual(rc, 2)
+        self.assertIn("не найден", err)
+        self.assertIn("postgres_integration", err)  # подсказали правильное имя
+
+    def test_repo_without_configs_says_so(self):
+        rc, err = self._run("integration", Path(self._tmp.name))
+        self.assertEqual(rc, 2)
+        self.assertIn("ни одного", err)
 
 
 if __name__ == "__main__":

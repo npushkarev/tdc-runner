@@ -62,6 +62,9 @@ def _err(code, message):
 def list_compose_files(config_dir):
     config_dir = Path(config_dir)
     issues = []
+    if not config_dir.is_dir():
+        return [_err("config.missing_dir",
+                     "каталог конфигурации не найден: %s" % config_dir)]
     for entry in sorted(config_dir.iterdir()):
         if entry.name == COMPOSE_FILE_NAME or not entry.is_file():
             continue

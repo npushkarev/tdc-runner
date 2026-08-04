@@ -159,6 +159,17 @@ def _cmd_run(args):
     if args.mode == "local":
         config_dir = (ctx.repo_root / CONFIG_DIR_ROOT / TRIGGER_CLASSES[0]
                       / args.config)
+        if not config_dir.is_dir():
+            # опечатка в имени набора не должна выглядеть как падение ядра
+            available = [d.name for d in runner.scan_configs(ctx.repo_root)]
+            print("tdc: набор %r не найден в %s" % (args.config, ctx.repo_root),
+                  file=sys.stderr)
+            print("tdc: доступны: %s"
+                  % (", ".join(available) if available
+                     else "ни одного (нет каталога %s/%s/)"
+                          % (CONFIG_DIR_ROOT, TRIGGER_CLASSES[0])),
+                  file=sys.stderr)
+            return 2
         cfg, issues = runner.load_config(config_dir)
         if cfg is None or any(i.severity == "error" for i in issues):
             results = [RunResult(args.config, ERROR, "validation failed",
