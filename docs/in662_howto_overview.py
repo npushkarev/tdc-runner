@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate codex_scheme.png: a concise overview of the tdc-runner workflow."""
+"""Generate in662_howto_overview.png: a concise overview of the tdc-runner workflow."""
 
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 SCALE = 2
 LOGICAL_WIDTH = 1200
 LOGICAL_HEIGHT = 880
-OUTPUT = Path(__file__).with_name("codex_scheme.png")
+OUTPUT = Path(__file__).with_name("in662_howto_overview.png")
 
 ARIAL = "/System/Library/Fonts/Supplemental/Arial.ttf"
 ARIAL_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"

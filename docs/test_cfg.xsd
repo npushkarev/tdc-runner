@@ -25,6 +25,7 @@
         <xs:element name="environment" type="environmentType"/>
         <xs:element name="inputs" type="inputsType" minOccurs="0"/>
         <xs:element name="outputs" type="outputsType"/>
+        <xs:element name="secrets" type="secretsType" minOccurs="0"/>
         <xs:element name="privileges" type="privilegesType" minOccurs="0"/>
         <xs:element name="execution" type="executionType"/>
       </xs:sequence>
@@ -162,6 +163,32 @@
         </xs:complexType>
       </xs:element>
     </xs:choice>
+  </xs:complexType>
+
+  <!-- ===== secrets: пароли файлами, а не переменными ===== -->
+
+  <xs:complexType name="secretsType">
+    <xs:annotation><xs:documentation>
+      Значения выкладывает отдельный шаг билда, ядро монтирует каталог как
+      /test/secrets (только чтение) и ТОЛЬКО тем сервисам, что перечислены в
+      services=; пустой services= означает главный сервис. name = имя файла,
+      поэтому только [a-z0-9_]. Объявленный, но не выложенный секрет — ошибка
+      до запуска контейнеров ("secrets.file_missing").
+    </xs:documentation></xs:annotation>
+    <xs:sequence>
+      <xs:element name="secret" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="name" use="required">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:pattern value="[a-z0-9_]+"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+          <xs:attribute name="services" type="xs:string"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
   </xs:complexType>
 
   <!-- ===== privileges: managed relaxation of cap_drop: ALL ===== -->

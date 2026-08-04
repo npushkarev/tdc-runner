@@ -114,15 +114,32 @@ class ParseTestCfgErrorsTest(unittest.TestCase):
         cfg = self._parse_text(body)
         self.assertEqual(cfg.warnings, [])
 
-    def test_secrets_block_rejected_while_unimplemented(self):
-        # молчаливое игнорирование хуже отказа: автор решит, что пароль доставлен
+    def test_secrets_parsed_with_and_without_services(self):
         body = VALID_BODY.replace(
             "<execution>",
-            '<secrets><secret name="db_password" services="postgres"/>'
-            '</secrets><execution>')
+            '<secrets><secret name="db_password" services="postgres cache"/>'
+            '<secret name="api_key"/></secrets><execution>')
+        cfg = self._parse_text(body)
+        self.assertEqual([(s.name, s.services) for s in cfg.secrets],
+                         [("db_password", ["postgres", "cache"]),
+                          ("api_key", [])])
+
+    def test_secret_name_must_be_a_plain_file_name(self):
+        for bad in ("../escape", "Db-Password", "with space", ""):
+            body = VALID_BODY.replace(
+                "<execution>",
+                '<secrets><secret name="%s"/></secrets><execution>' % bad)
+            with self.assertRaises(ConfigError) as ctx:
+                self._parse_text(body)
+            self.assertIn("secrets.bad_name", self._codes(ctx), bad)
+
+    def test_duplicate_secret_rejected(self):
+        body = VALID_BODY.replace(
+            "<execution>",
+            '<secrets><secret name="pw"/><secret name="pw"/></secrets><execution>')
         with self.assertRaises(ConfigError) as ctx:
             self._parse_text(body)
-        self.assertIn("secrets.not_implemented", self._codes(ctx))
+        self.assertIn("secrets.duplicate", self._codes(ctx))
 
     def test_privileges_cap_add_parsed(self):
         body = VALID_BODY.replace(

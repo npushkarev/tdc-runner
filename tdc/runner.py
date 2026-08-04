@@ -73,7 +73,7 @@ from xml.etree import ElementTree
 
 from .model import (
     CONFIG_DIR_ROOT, CONFIG_NAME_RE, COMPOSE_FILE_NAME, ENV_DEFAULT_NAME,
-    ENV_LOCAL_NAME,
+    ENV_LOCAL_NAME, SECRET_NAME_RE,
     HARNESS_LABEL, INFRA_REPORT_DIR, TEST_CFG_NAME, ConfigError, RunResult,
     ValidationIssue, PASSED, FAILED, SKIPPED, ERROR,
 )
@@ -165,6 +165,7 @@ def run_config(cfg, ctx, execute):
         doc, main_service, ctx.registry_prefixes, config_dir=cfg.dir))
     for spec in cfg.inputs:
         issues.extend(staging.validate_input_spec(spec))
+    issues.extend(_check_secrets(cfg, ctx))
     if _has_errors(issues):
         return RunResult(cfg.name, ERROR, "validation failed", issues=issues)
 
@@ -239,6 +240,42 @@ def run_config(cfg, ctx, execute):
         finally:
             execute(base + ["down", "-v", "--remove-orphans"])
     return RunResult(cfg.name, status, details, issues=issues)
+
+
+def _check_secrets(cfg, ctx):
+    """Fail-closed: объявил секрет — он обязан быть выложен файлом до запуска.
+
+    Иначе контейнер стартует, прочитает пустоту и упадёт где-то в тестах, а
+    настоящая причина останется незаметной.
+    """
+    if not cfg.secrets:
+        return []
+    if ctx.secrets_dir is None:
+        return [ValidationIssue(
+            "error", "secrets.dir_missing",
+            "объявлено секретов: %d, но каталог с ними не передан. Локально — "
+            "--secrets <каталог>; в CI — шаг «Секреты» и переменная TDC_SECRETS"
+            % len(cfg.secrets))]
+    issues = []
+    known = {s.name for s in cfg.secrets}
+    for spec in cfg.secrets:
+        path = Path(ctx.secrets_dir) / spec.name
+        if not path.is_file():
+            issues.append(ValidationIssue(
+                "error", "secrets.file_missing",
+                "секрет %r не выложен: нет файла %s" % (spec.name, path)))
+    # лишние файлы в каталоге — повод сказать вслух: не опечатка ли в имени
+    try:
+        extra = sorted(p.name for p in Path(ctx.secrets_dir).iterdir()
+                       if p.is_file() and p.name not in known)
+    except OSError:
+        extra = []
+    if extra:
+        issues.append(ValidationIssue(
+            "warning", "secrets.unused_files",
+            "в каталоге секретов есть файлы, которых нет в манифесте: %s"
+            % ", ".join(extra)))
+    return issues
 
 
 def _last_line(text):

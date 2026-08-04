@@ -32,7 +32,7 @@ import json
 from pathlib import Path
 
 from .model import (
-    HARNESS_LABEL, INJECTED_ENV_NAMES, TEST_INPUT_MOUNT, TEST_OUTPUT_MOUNT,
+    HARNESS_LABEL, INJECTED_ENV_NAMES, TEST_INPUT_MOUNT, TEST_OUTPUT_MOUNT, TEST_SECRETS_MOUNT,
     RunContext, TestConfig,  # noqa: F401  (part of the documented signatures)
 )
 
@@ -55,9 +55,19 @@ def injected_env(config_name, slot, ci_env):
     return dict((name, values[name]) for name in INJECTED_ENV_NAMES)
 
 
+def _secret_services(cfg):
+    """Сервис -> нужен ли ему каталог секретов. Пусто в services= = только главный."""
+    main = cfg.execution.main_service if cfg.execution else None
+    needed = set()
+    for spec in cfg.secrets:
+        needed.update(spec.services or ([main] if main else []))
+    return needed
+
+
 def generate_override(doc, cfg, ctx, staging_dir, output_dir):
     environment = injected_env(cfg.name, ctx.slot, ctx.ci_env)
     main_service = cfg.execution.main_service if cfg.execution else None
+    secret_services = _secret_services(cfg) if ctx.secrets_dir else set()
     services = {}
     for name in (doc.get("services") or {}):
         service = {
@@ -77,6 +87,12 @@ def generate_override(doc, cfg, ctx, staging_dir, output_dir):
             "security_opt": ["no-new-privileges:true"],
             "labels": {HARNESS_LABEL: "1"},
         }
+        # Секреты видит только тот, кто их запросил: остальным сервисам каталог
+        # не монтируется вовсе, чтобы пароль не расползался по обвязке.
+        if name in secret_services:
+            service["volumes"].append(
+                {"type": "bind", "source": str(ctx.secrets_dir),
+                 "target": TEST_SECRETS_MOUNT, "read_only": True})
         if name != main_service:
             service["restart"] = "no"
         # declared in test_cfg.xml, validated against the closed dictionary

@@ -4,6 +4,7 @@
 # параметризация — через окружение (задаётся шаблоном TC):
 #   TDC_SLOT              слот вида lin-x64 (шаблон: env.TDC_SLOT = %slot.os%-%slot.arch%)
 #   TDC_ARTIFACTS         каталог скачанных артефактов сборки (artifact dependency)
+#   TDC_SECRETS           каталог с файлами-секретами (готовит шаг «Секреты»)
 #   TDC_OUT               куда класть отчёты (публикуется артефактами билда)
 #   TDC_REPO              корень checkout'а тестируемого репо (дефолт: текущий каталог)
 #   TDC_BUILD_ID          уникальный id рана для compose project name
@@ -53,6 +54,9 @@ echo "  свободно на $DOCKER_ROOT: ${FREE_MB:-?} МБ"
 ARGS=(run --mode ci --repo "$REPO" --slot "$SLOT" --out "$OUT" --build-id "$BUILD_ID")
 if [ -n "${TDC_ARTIFACTS:-}" ] && [ -d "${TDC_ARTIFACTS}" ]; then
     ARGS+=(--artifacts "$TDC_ARTIFACTS")
+fi
+if [ -n "${TDC_SECRETS:-}" ] && [ -d "${TDC_SECRETS}" ]; then
+    ARGS+=(--secrets "$TDC_SECRETS")
 fi
 for p in ${TDC_REGISTRY_PREFIXES:-}; do
     ARGS+=(--registry-prefix "$p")

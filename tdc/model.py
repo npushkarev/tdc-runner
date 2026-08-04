@@ -15,6 +15,8 @@ XML_OS_MAP = {"linux": "lin", "windows": "win"}  # test_cfg.xml -> canonical
 TRIGGER_CLASSES = ("post_commit",)  # v1
 CONFIG_DIR_ROOT = "test_docker_config"
 CONFIG_NAME_RE = r"^[a-z0-9_]+$"
+# Имя секрета = имя файла в каталоге секретов, поэтому без путей и точек
+SECRET_NAME_RE = r"^[a-z0-9_]+$"
 COMPOSE_FILE_NAME = "docker-compose.yml"
 ENV_DEFAULT_NAME = ".env.default"
 # Локальные переопределения разработчика: читаются только в режиме local
@@ -25,6 +27,7 @@ TEST_CFG_NAME = "test_cfg.xml"
 # In-container mount points (linux v1); reach services via env vars.
 TEST_INPUT_MOUNT = "/test/input"
 TEST_OUTPUT_MOUNT = "/test/output"
+TEST_SECRETS_MOUNT = "/test/secrets"
 RESERVED_MOUNT_PREFIX = "/test"
 
 # .env.default may not define names with these prefixes (harness/compose control).
@@ -108,6 +111,12 @@ class OutputArtifactSpec:
 
 
 @dataclass
+class SecretSpec:
+    name: str                       # имя файла в каталоге секретов
+    services: List[str] = field(default_factory=list)  # пусто = только главный
+
+
+@dataclass
 class Execution:
     main_service: str
     timeout_minutes: int
@@ -127,6 +136,7 @@ class TestConfig:
     execution: Optional[Execution] = None
     # service name -> capabilities added back after cap_drop: ALL (ALLOWED_CAP_ADD)
     cap_add: Dict[str, List[str]] = field(default_factory=dict)
+    secrets: List[SecretSpec] = field(default_factory=list)
     # non-fatal findings from parsing (open dictionaries); load_config surfaces them
     warnings: List["ValidationIssue"] = field(default_factory=list)
 
@@ -184,6 +194,8 @@ class RunContext:
     compose_bin: Tuple[str, ...] = ("docker", "compose")
     docker_bin: Tuple[str, ...] = ("docker",)
     dry_run: bool = False            # validate + stage + generate, no docker calls
+    # каталог с файлами-секретами, выложенный отдельным шагом билда
+    secrets_dir: Optional[Path] = None
 
     def project_name(self, config_name: str) -> str:
         prefix = "tc%s" % self.build_id if self.mode == "ci" else "tdc-%s" % self.repo_root.name

@@ -16,6 +16,8 @@ parse_test_cfg(path: Path) -> TestConfig
     - <outputs> report type is an OPEN dictionary: unknown -> warning
       "outputs.report_type_unknown", still collected (published as artifact).
       Warnings ride on TestConfig.warnings; only errors raise ConfigError.
+    - <secrets>: <secret name= [services=]/> — пароли приезжают файлами в
+      /test/secrets; services= сужает список сервисов (пусто = только главный).
     - <privileges>: <service name= cap_add="CHOWN SETUID"/> — capabilities
       given back after the harness cap_drop: ALL. Names from ALLOWED_CAP_ADD
       (closed dictionary) else error "privileges.cap_unknown".
@@ -24,13 +26,15 @@ parse_test_cfg(path: Path) -> TestConfig
     - Collect ALL problems into ConfigError(issues) rather than failing on
       the first one. name/dir fields are filled by the caller (runner).
 """
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from .model import (
     ALLOWED_CAP_ADD, ARCHES, CAPABILITIES, CONTAINER_TEST_SUITE_TYPES,
-    REPORT_FORMATS, XML_OS_MAP, Capability, ConfigError, Execution, InputSpec,
-    OutputArtifactSpec, ReportSpec, TestConfig, ValidationIssue,
+    REPORT_FORMATS, SECRET_NAME_RE, XML_OS_MAP, Capability, ConfigError,
+    Execution, InputSpec, OutputArtifactSpec, ReportSpec, SecretSpec,
+    TestConfig, ValidationIssue,
 )
 
 SCHEMA_VERSION = "1"
@@ -142,6 +146,28 @@ def _parse_outputs(outputs, cfg, issues):
             _err(issues, "outputs.unknown_element", "unexpected <%s> in <outputs>" % el.tag)
 
 
+def _parse_secrets(secrets, cfg, issues):
+    """<secret name= [services="a b"]/>: имя = файл в каталоге секретов."""
+    seen = set()
+    for el in secrets:
+        if el.tag != "secret":
+            _err(issues, "secrets.unknown_element",
+                 "unexpected <%s> in <secrets>" % el.tag)
+            continue
+        name = (el.get("name") or "").strip()
+        if not re.match(SECRET_NAME_RE, name or ""):
+            _err(issues, "secrets.bad_name",
+                 "имя секрета %r должно соответствовать %s (это имя файла)"
+                 % (name, SECRET_NAME_RE))
+            continue
+        if name in seen:
+            _err(issues, "secrets.duplicate", "секрет %r объявлен дважды" % name)
+            continue
+        seen.add(name)
+        cfg.secrets.append(SecretSpec(name=name,
+                                      services=(el.get("services") or "").split()))
+
+
 def _parse_privileges(privileges, cfg, issues):
     for el in privileges:
         if el.tag != "service":
@@ -223,14 +249,9 @@ def parse_test_cfg(path):
         _err(issues, "outputs.no_tests_report",
              'at least one <report type="tests"> is required')
 
-    # Механика секретов спроектирована (см. docs/ARCHITECTURE.md), но не
-    # реализована. Молча игнорировать блок нельзя: автор решит, что пароль
-    # доставлен, и получит пустое место вместо значения.
-    if root.find("secrets") is not None:
-        _err(issues, "secrets.not_implemented",
-             "<secrets> пока не поддерживается: доставка паролей файлами ещё "
-             "не реализована. Уберите блок и напишите нам — подскажем обходной "
-             "путь для вашего случая")
+    secrets = root.find("secrets")
+    if secrets is not None:
+        _parse_secrets(secrets, cfg, issues)
 
     privileges = root.find("privileges")
     if privileges is not None:

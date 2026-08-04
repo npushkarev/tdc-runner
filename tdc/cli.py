@@ -6,7 +6,8 @@ validate: --repo PATH [--registry-prefix P ...]
     issues, exit 1 on any error.
 
 run: --repo PATH --slot lin-x64 --mode {ci,local} --out PATH
-     [--artifacts PATH] [--config NAME] [--build-id ID] [--dry-run]
+     [--artifacts PATH] [--secrets PATH] [--config NAME]
+     [--build-id ID] [--dry-run]
      [--registry-prefix P ...]
     mode=ci runs every slot-matching config (runner.run_slot);
     mode=local requires --config and runs just it.
@@ -152,6 +153,8 @@ def _cmd_run(args):
         ci_env=ci_env,
         registry_prefixes=_registry_prefixes(args),
         dry_run=args.dry_run,
+        secrets_dir=Path(args.secrets).resolve() if args.secrets
+        else None,
     )
     if compose_bin is not None:
         ctx.compose_bin = tuple(compose_bin)
@@ -205,6 +208,8 @@ def main(argv=None):
     p_run.add_argument("--mode", choices=("ci", "local"), required=True)
     p_run.add_argument("--out", required=True)
     p_run.add_argument("--artifacts")
+    p_run.add_argument("--secrets",
+                       help="каталог с файлами-секретами (см. <secrets>)")
     p_run.add_argument("--config")
     p_run.add_argument("--build-id", default="local")
     p_run.add_argument("--dry-run", action="store_true")

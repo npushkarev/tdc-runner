@@ -92,6 +92,42 @@ class GenerateOverrideTest(unittest.TestCase):
         self.assertEqual(postgres["cap_drop"], ["ALL"])  # drop stays, add is on top
         self.assertNotIn("cap_add", override["services"]["tests"])
 
+    def test_secrets_mounted_only_where_declared(self):
+        from tdc.model import SecretSpec
+        cfg = make_cfg()
+        cfg.secrets = [SecretSpec("db_password", ["postgres"])]
+        ctx = make_ctx(); ctx.secrets_dir = Path("/build/secrets")
+        override = overridegen.generate_override(
+            DOC, cfg, ctx, self.staging, self.output)
+        targets = lambda n: [v["target"] for v in override["services"][n]["volumes"]]
+        self.assertIn("/test/secrets", targets("postgres"))
+        self.assertNotIn("/test/secrets", targets("tests"))
+        mount = [v for v in override["services"]["postgres"]["volumes"]
+                 if v["target"] == "/test/secrets"][0]
+        self.assertTrue(mount["read_only"])
+
+    def test_secrets_default_to_main_service(self):
+        from tdc.model import SecretSpec
+        cfg = make_cfg()
+        cfg.secrets = [SecretSpec("api_key", [])]  # services= не указан
+        ctx = make_ctx(); ctx.secrets_dir = Path("/build/secrets")
+        override = overridegen.generate_override(
+            DOC, cfg, ctx, self.staging, self.output)
+        targets = lambda n: [v["target"] for v in override["services"][n]["volumes"]]
+        self.assertIn("/test/secrets", targets("tests"))       # главный
+        self.assertNotIn("/test/secrets", targets("postgres"))
+
+    def test_no_secrets_dir_no_mount(self):
+        from tdc.model import SecretSpec
+        cfg = make_cfg()
+        cfg.secrets = [SecretSpec("api_key", [])]
+        override = overridegen.generate_override(
+            DOC, cfg, make_ctx(), self.staging, self.output)
+        for name in ("tests", "postgres"):
+            self.assertNotIn("/test/secrets",
+                             [v["target"] for v in
+                              override["services"][name]["volumes"]])
+
     def test_harness_label(self):
         for name in ("tests", "postgres"):
             self.assertEqual(self.override["services"][name]["labels"],
