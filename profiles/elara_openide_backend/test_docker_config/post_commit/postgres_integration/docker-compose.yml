@@ -1,0 +1,66 @@
+# Набор интеграционных тестов слоя Infrastructure (PostgreSQL).
+# Кладётся в корень репозитория SCADA/elara_openide_backend.
+#
+# Отличия от вашего postgres-integration-tests-compose.yaml и почему:
+#   build:          -> image:  тестовая машина не собирает образы и не получает
+#                              исходники; образ собирает отдельная конфигурация
+#                              сборки и публикует в ProGet
+#   container_name:    убран   два прогона одновременно не уживутся, имена даёт
+#                              система (они уникальны на запуск)
+#   restart: always    убран   под тестовый прогон это бесконечный подъём
+#                              упавшей базы
+#   command:           добавлен  ваш CMD не выгружал отчёты наружу — три
+#                                последних ключа это чинят
+services:
+  tests:
+    # ЗАМЕНИТЬ <ФИД>: фид ProGet, куда публикуется образ с тестами.
+    # Тег держим в .env.default, чтобы поднимать версию одной строкой.
+    image: proget.inc.elara.local/<ФИД>/openide-postgres-integration-tests:${TESTS_IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy   # ждём готовности базы, а не старта контейнера
+    environment:
+      # значение без "=" берётся из .env.default
+      - ASPNETCORE_ENVIRONMENT=Testing
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_HOST=postgres       # к соседу по имени сервиса, не localhost
+      - POSTGRES_PORT=5432
+      - READ_DB
+      - WRITE_DB
+    command:
+      - dotnet
+      - test
+      # Проверено как есть: у вас в /app лежит .slnx, и dotnet test находит цель
+      # сам. Надёжнее указать проект явно — тогда результат не зависит от того,
+      # что лежит в рабочем каталоге образа. Для этого раскомментируйте строку:
+      # - ./tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests.csproj
+      - --filter
+      - Category=Integration&DbProvider=Npgsql
+      - --no-build
+      - -c
+      - Release
+      # ↓ ради этих трёх ключей всё и затевалось: без них отчёты остаются
+      #   внутри контейнера и умирают вместе с ним
+      - --logger
+      - trx;LogFileName=integration.trx
+      - --collect:XPlat Code Coverage
+      - --results-directory
+      - /test/output/results
+
+  postgres:
+    image: proget.inc.elara.local/main/library/postgres:18.1
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+    volumes:
+      - postgres-test-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-test-data:
