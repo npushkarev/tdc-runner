@@ -174,6 +174,26 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual((infra / "compose-logs.txt").read_text(), "LOGLINE\n")
         self.assertTrue((infra / "compose-ps.txt").is_file())
 
+    def test_env_local_overrides_only_in_local_mode(self):
+        (self.cfg_dir / ".env.local").write_text("POSTGRES_USER=mine\n",
+                                                 encoding="utf-8")
+        self.mocks["parse_env_file"].side_effect = [
+            {"POSTGRES_USER": "test"}, {"POSTGRES_USER": "mine"}]
+        self.ctx.mode = "local"
+        self._seed_report()
+        runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        # .env.default прочитан, затем перекрыт .env.local
+        self.assertEqual(self.mocks["parse_env_file"].call_count, 2)
+
+    def test_env_local_ignored_in_ci_with_a_warning(self):
+        (self.cfg_dir / ".env.local").write_text("POSTGRES_USER=mine\n",
+                                                 encoding="utf-8")
+        self._seed_report()
+        result = runner.run_config(self.cfg, self.ctx,
+                                   FakeExecute(wait_stdout="0\n"))
+        self.assertEqual(self.mocks["parse_env_file"].call_count, 1)
+        self.assertIn("env.local_ignored", [i.code for i in result.issues])
+
     def test_up_failure_reports_the_reason(self):
         # "up failed (rc=1)" alone sends people digging; docker already said why
         stderr = ("time=... level=warning msg=...\n"

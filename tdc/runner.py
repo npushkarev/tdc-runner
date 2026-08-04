@@ -73,6 +73,7 @@ from xml.etree import ElementTree
 
 from .model import (
     CONFIG_DIR_ROOT, CONFIG_NAME_RE, COMPOSE_FILE_NAME, ENV_DEFAULT_NAME,
+    ENV_LOCAL_NAME,
     HARNESS_LABEL, INFRA_REPORT_DIR, TEST_CFG_NAME, ConfigError, RunResult,
     ValidationIssue, PASSED, FAILED, SKIPPED, ERROR,
 )
@@ -132,6 +133,22 @@ def run_config(cfg, ctx, execute):
         return RunResult(cfg.name, ERROR, "bad %s" % ENV_DEFAULT_NAME,
                          issues=list(exc.issues))
     issues.extend(envfile.check_reserved(defaults))
+    # .env.local перекрывает .env.default, но только при локальном запуске:
+    # на агенте такого файла быть не должно, иначе прогон зависит от машины.
+    local_env = cfg.dir / ENV_LOCAL_NAME
+    if ctx.mode == "local" and local_env.is_file():
+        try:
+            overrides = envfile.parse_env_file(local_env)
+        except ConfigError as exc:
+            return RunResult(cfg.name, ERROR, "bad %s" % ENV_LOCAL_NAME,
+                             issues=list(exc.issues))
+        issues.extend(envfile.check_reserved(overrides))
+        defaults = envfile.merge_env(defaults, overrides)
+    elif ctx.mode != "local" and local_env.is_file():
+        issues.append(ValidationIssue(
+            "warning", "env.local_ignored",
+            "%s есть в репозитории, но в режиме %s игнорируется"
+            % (ENV_LOCAL_NAME, ctx.mode)))
     merged = envfile.merge_env(
         defaults, overridegen.injected_env(cfg.name, ctx.slot, ctx.ci_env))
     work_env = work / ".env"

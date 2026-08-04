@@ -17,6 +17,9 @@ CONFIG_DIR_ROOT = "test_docker_config"
 CONFIG_NAME_RE = r"^[a-z0-9_]+$"
 COMPOSE_FILE_NAME = "docker-compose.yml"
 ENV_DEFAULT_NAME = ".env.default"
+# Локальные переопределения разработчика: читаются только в режиме local
+# и не коммитятся (их место — в .gitignore тестируемого репозитория).
+ENV_LOCAL_NAME = ".env.local"
 TEST_CFG_NAME = "test_cfg.xml"
 
 # In-container mount points (linux v1); reach services via env vars.
