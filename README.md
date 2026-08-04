@@ -28,7 +28,7 @@ python3 -m tdc run --mode local --repo <repo_root> --config <name> \
 | разработчику компонента | **[docs/HOWTO.md](docs/HOWTO.md)** — как подключить свои тесты: маршрут из четырёх шагов, готовые шаблоны в `templates/`, рецепты и разбор ошибок |
 | тому, кто принимает решения | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — устройство, обоснования, что уже проверено, границы и открытые вопросы |
 | при работе с контрактом | `docs/test_cfg.xsd` — формат манифеста (документация; исполняемая валидация — код) |
-| для статьи-регламента | `docs/confluence_article_draft.md` |
+| командам, чьи компоненты тестируются | **[docs/confluence_article.md](docs/confluence_article.md)** — статья для Confluence: требования к репозиторию, что запрещено, что вы получите |
 
 Схемы — `docs/in662_*.png`, рядом лежат редактируемые `.excalidraw` и генераторы
 (`diagen.py` + `make_diagrams.py` для архитектурных, `in662_howto_overview.py`

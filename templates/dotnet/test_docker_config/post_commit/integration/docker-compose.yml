@@ -4,6 +4,10 @@ services:
     # ЗАМЕНИТЬ: образ с вашими собранными тестами (собирается отдельной
     # конфигурацией сборки и публикуется в ProGet; тег — конкретный, не latest)
     image: proget.inc.elara.local/FEED/my-component-tests:1.0.0
+    # переменные из .env.default попадают внутрь ТОЛЬКО если перечислены здесь;
+    # имя без значения = взять значение из .env.default
+    environment:
+      - ASPNETCORE_ENVIRONMENT
     command:
       - dotnet
       - test

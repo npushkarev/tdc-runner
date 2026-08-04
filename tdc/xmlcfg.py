@@ -223,6 +223,15 @@ def parse_test_cfg(path):
         _err(issues, "outputs.no_tests_report",
              'at least one <report type="tests"> is required')
 
+    # Механика секретов спроектирована (см. docs/ARCHITECTURE.md), но не
+    # реализована. Молча игнорировать блок нельзя: автор решит, что пароль
+    # доставлен, и получит пустое место вместо значения.
+    if root.find("secrets") is not None:
+        _err(issues, "secrets.not_implemented",
+             "<secrets> пока не поддерживается: доставка паролей файлами ещё "
+             "не реализована. Уберите блок и напишите нам — подскажем обходной "
+             "путь для вашего случая")
+
     privileges = root.find("privileges")
     if privileges is not None:
         _parse_privileges(privileges, cfg, issues)

@@ -3,6 +3,10 @@ services:
   tests:
     # ЗАМЕНИТЬ: образ с рантаймом, в котором запускаются ваши бинарники
     image: proget.inc.elara.local/FEED/gcc84-runtime:1.0.0
+    # переменные из .env.default попадают внутрь ТОЛЬКО если перечислены здесь;
+    # имя без значения = взять значение из .env.default
+    environment:
+      - LOG_LEVEL
     working_dir: /test/input/bin
     command:
       # ЗАМЕНИТЬ: имя вашего тестового бинарника

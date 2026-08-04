@@ -111,6 +111,16 @@ class ParseTestCfgErrorsTest(unittest.TestCase):
         cfg = self._parse_text(body)
         self.assertEqual(cfg.warnings, [])
 
+    def test_secrets_block_rejected_while_unimplemented(self):
+        # молчаливое игнорирование хуже отказа: автор решит, что пароль доставлен
+        body = VALID_BODY.replace(
+            "<execution>",
+            '<secrets><secret name="db_password" services="postgres"/>'
+            '</secrets><execution>')
+        with self.assertRaises(ConfigError) as ctx:
+            self._parse_text(body)
+        self.assertIn("secrets.not_implemented", self._codes(ctx))
+
     def test_privileges_cap_add_parsed(self):
         body = VALID_BODY.replace(
             "<execution>",
