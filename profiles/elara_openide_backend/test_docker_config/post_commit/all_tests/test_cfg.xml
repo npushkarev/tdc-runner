@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<test_cfg version="1">
+  <meta>
+    <description>OpenIde backend: все тесты решения, кроме web-набора</description>
+  </meta>
+
+  <environment>
+    <os>linux</os>
+    <arch>x64</arch>
+  </environment>
+
+  <outputs>
+    <report type="tests" format="trx" path="results/**/*.trx"/>
+    <report type="coverage" format="cobertura"
+            path="results/*/coverage.cobertura.xml" optional="true"/>
+  </outputs>
+
+  <!-- юнит-тестам база не нужна, но она в том же compose: пусть стартует -->
+  <privileges>
+    <service name="postgres" cap_add="CHOWN DAC_OVERRIDE FOWNER SETGID SETUID"/>
+  </privileges>
+
+  <execution>
+    <main_service>tests</main_service>
+    <timeout_minutes>30</timeout_minutes>
+  </execution>
+</test_cfg>
