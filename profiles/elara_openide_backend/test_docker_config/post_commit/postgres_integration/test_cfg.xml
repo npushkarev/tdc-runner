@@ -9,27 +9,44 @@
     <arch>x64</arch>
   </environment>
 
-  <!-- Входов нет: тестовый образ самодостаточен (publish-бандл вкомпилен в него
-       сборочной конфигурацией). Появятся, когда бандл начнут подавать артефактом. -->
+  <!-- Входов нет: тестовый образ самодостаточен, бинарники собраны внутрь него
+       конфигурацией сборки. Блок inputs понадобится, когда бандл начнут подавать
+       артефактом, а не запекать в образ. -->
 
   <outputs>
     <report type="tests" format="trx" path="results/**/*.trx"/>
-    <!-- VSTest дублирует файл в каталог вложений (results/_<host>_<date>/In/...),
-       поэтому глоб ровно на один уровень, а не ** -->
-    <report type="coverage" format="cobertura" path="results/*/coverage.cobertura.xml" optional="true"/>
-    <!-- Snapshooter кладёт .mismatch рядом со снапшотами только при расхождении -->
-    <report type="snapshots" format="raw" path="snapshots/**" optional="true"/>
-    <artifact path="logs/**" optional="true"/>
+
+    <!-- Глоб ровно на один уровень. VSTest кладёт копию отчёта в каталог
+         вложений, и "**" забрал бы оба файла, удвоив цифры покрытия. -->
+    <report type="coverage" format="cobertura"
+            path="results/*/coverage.cobertura.xml" optional="true"/>
   </outputs>
 
-  <!-- postgres initdb создаёт свой data-каталог при первом старте:
-       под голым cap_drop: ALL контейнер не поднимется -->
+  <!-- Чего здесь сознательно нет.
+
+       Снапшоты: Snapshooter при расхождении пишет файлы рядом с самими
+       снапшотами, то есть внутри образа, а не в /test/output. Строка про них
+       выглядела бы полезной, но не собирала бы ничего. Чтобы они доезжали,
+       тесты должны класть их в /test/output; тогда сюда добавляется
+       report type="snapshots" format="raw" path="snapshots/**" optional="true".
+
+       Логи приложения: то же самое. Каталог logs/ никто не наполняет, пока
+       тесты не начнут писать туда явно.
+
+       Правило простое: не держим в манифесте строк, которые ничего не делают —
+       они создают ложное ощущение, что диагностика собирается. -->
+
+  <!-- postgres при первом старте создаёт свой каталог данных и переключает
+       пользователя: под снятыми привилегиями не поднимется. Проверено на
+       стенде — этих пяти хватает и для 18.1. -->
   <privileges>
     <service name="postgres" cap_add="CHOWN DAC_OVERRIDE FOWNER SETGID SETUID"/>
   </privileges>
 
   <execution>
     <main_service>tests</main_service>
+    <!-- Потолок, а не ожидаемое время: набор отрабатывает за секунды. Смысл в
+         том, чтобы зависший прогон не держал агента полчаса. -->
     <timeout_minutes>20</timeout_minutes>
   </execution>
 </test_cfg>

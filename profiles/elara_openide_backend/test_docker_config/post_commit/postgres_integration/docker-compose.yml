@@ -31,10 +31,9 @@ services:
     command:
       - dotnet
       - test
-      # Проверено как есть: у вас в /app лежит .slnx, и dotnet test находит цель
-      # сам. Надёжнее указать проект явно — тогда результат не зависит от того,
-      # что лежит в рабочем каталоге образа. Для этого раскомментируйте строку:
-      # - ./tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests.csproj
+      # Цель указана явно. Без неё dotnet test берёт .slnx из /app, то есть
+      # результат зависит от того, что лежит в рабочем каталоге образа.
+      - ./tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests.csproj
       - --filter
       - Category=Integration&DbProvider=Npgsql
       - --no-build
@@ -47,6 +46,11 @@ services:
       - --collect:XPlat Code Coverage
       - --results-directory
       - /test/output/results
+      # Считаем покрытие только слоёв, которые эти тесты и проверяют.
+      # Без фильтра в знаменатель попадают ВСЕ связанные сборки, и цифра
+      # получается бессмысленной (на стенде вышло 4.44%).
+      - --
+      - DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include=[Elara.OpenIde.Backend.Infrastructure]*,[Elara.OpenIde.Backend.Application]*
 
   postgres:
     image: proget.inc.elara.local/main/library/postgres:18.1
