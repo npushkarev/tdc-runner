@@ -14,7 +14,7 @@ from unittest import mock
 from tdc import runner
 from tdc.model import (
     Execution, ReportSpec, RunContext, Slot, TestConfig, ValidationIssue,
-    PASSED, FAILED, ERROR,
+    PASSED, FAILED, SKIPPED, ERROR,
 )
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -341,6 +341,34 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual(result.status, PASSED)
         self.assertEqual(result.details, "dry-run")
         self.assertEqual(execute.calls, [])
+
+
+class RunSlotTest(unittest.TestCase):
+    """Режим ci: единственная ветка, где шлются testSuiteStarted/Finished.
+
+    До первого прогона через ci/run_tests.sh она не выполнялась ни разу и
+    падала с TypeError в teamcity.message.
+    """
+
+    def test_suite_messages_do_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = RunContext(
+                mode="ci", slot=Slot("lin", "x64"),
+                repo_root=FIXTURES / "demo_repo", artifacts_root=None,
+                output_root=Path(tmp) / "out", build_id="7", dry_run=True)
+            results = runner.run_slot(ctx, FakeExecute())
+        self.assertEqual([r.config_name for r in results],
+                         ["postgres_integration"])
+        self.assertEqual(results[0].status, PASSED)
+
+    def test_slot_mismatch_is_skipped_not_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = RunContext(
+                mode="ci", slot=Slot("lin", "arm64"),
+                repo_root=FIXTURES / "demo_repo", artifacts_root=None,
+                output_root=Path(tmp) / "out", build_id="7", dry_run=True)
+            results = runner.run_slot(ctx, FakeExecute())
+        self.assertEqual([r.status for r in results], [SKIPPED])
 
 
 if __name__ == "__main__":

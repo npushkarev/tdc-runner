@@ -22,8 +22,11 @@ def escape(value: str) -> str:
     return "".join(out)
 
 
-def message(name: str, stream=None, **attrs) -> str:
-    parts = ["##teamcity[%s" % name]
+def message(kind: str, stream=None, **attrs) -> str:
+    """kind это тип сообщения. Параметр НЕ называется name: сообщения
+    blockOpened и testSuiteStarted передают атрибут name=, и одноимённый
+    параметр давал TypeError. Поймано первым же прогоном через ci-пускалку."""
+    parts = ["##teamcity[%s" % kind]
     for key, value in attrs.items():
         parts.append(" %s='%s'" % (key, escape(value)))
     parts.append("]")

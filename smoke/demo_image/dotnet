@@ -1,0 +1,34 @@
+#!/bin/sh
+# Заглушка вместо настоящего dotnet. Принимает ровно те аргументы, что стоят
+# в шаблоне templates/dotnet, и пишет такие же файлы, как настоящий прогон.
+# Нужна только для показа: так шаблон работает без единой правки команды.
+set -e
+RESULTS=""
+prev=""
+for a in "$@"; do
+    [ "$prev" = "--results-directory" ] && RESULTS="$a"
+    prev="$a"
+done
+[ -n "$RESULTS" ] || { echo "нет --results-directory"; exit 2; }
+
+echo "dotnet test (заглушка для показа)"
+echo "  аргументы: $*"
+mkdir -p "$RESULTS/3f8b599e-ed2b-42e6-b428-f10187562474"
+
+cat > "$RESULTS/integration.trx" <<'TRX'
+<?xml version="1.0" encoding="UTF-8"?>
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <ResultSummary outcome="Completed">
+    <Counters total="7" executed="7" passed="7" failed="0"/>
+  </ResultSummary>
+</TestRun>
+TRX
+
+cat > "$RESULTS/3f8b599e-ed2b-42e6-b428-f10187562474/coverage.cobertura.xml" <<'COV'
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage line-rate="0.0553" branch-rate="0.0138"
+          lines-covered="238" lines-valid="4307"
+          branches-covered="18" branches-valid="1300"/>
+COV
+
+echo "Passed!  - Failed: 0, Passed: 7, Skipped: 0, Total: 7"
