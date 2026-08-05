@@ -185,12 +185,12 @@ WRITE_DB=openide
 ```
 tdc: compose = …/vendor/compose/docker-compose-linux-x86_64 (vendored)
 ##teamcity[importData type='mstest' path='…/reports/postgres_integration/tests/results/integration.trx']
-##teamcity[buildStatisticValue key='CodeCoverageAbsLCovered' value='331']
-##teamcity[buildStatisticValue key='CodeCoverageAbsLTotal' value='7447']
-##teamcity[buildStatisticValue key='CodeCoverageL' value='4.44']
-##teamcity[buildStatisticValue key='CodeCoverageAbsBCovered' value='43']
-##teamcity[buildStatisticValue key='CodeCoverageAbsBTotal' value='2248']
-##teamcity[buildStatisticValue key='CodeCoverageB' value='1.91']
+##teamcity[buildStatisticValue key='CodeCoverageAbsLCovered' value='238']
+##teamcity[buildStatisticValue key='CodeCoverageAbsLTotal' value='4307']
+##teamcity[buildStatisticValue key='CodeCoverageL' value='5.53']
+##teamcity[buildStatisticValue key='CodeCoverageAbsBCovered' value='18']
+##teamcity[buildStatisticValue key='CodeCoverageAbsBTotal' value='1300']
+##teamcity[buildStatisticValue key='CodeCoverageB' value='1.38']
 postgres_integration: passed (main service exit code 0)
 ```
 
@@ -205,9 +205,12 @@ reports/postgres_integration/_infra/compose-ps.txt
 
 После прогона на машине не осталось ни контейнеров, ни томов.
 
-Покрытие 4.44% это не поломка, а арифметика. Интеграционные тесты слоя
-Infrastructure считаются против всех связанных продуктовых сборок. Нужна
-осмысленная цифра: сужайте область сбора. Это настройка проекта.
+Тестов в наборе семь, все прошли.
+
+Покрытие 5.53% посчитано только по слоям Infrastructure и Application. Без
+этого фильтра в знаменатель попадали все связанные сборки, и выходило 4.44%
+от 7447 строк. Цифра становится ещё осмысленнее, если сузить область до одного
+слоя. Это настройка проекта, не контракта.
 
 ## Пять вещей, на которые наткнулись
 

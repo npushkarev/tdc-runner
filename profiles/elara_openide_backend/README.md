@@ -33,11 +33,9 @@ elara_openide_backend/
 рабочего каталога образа. Теперь путь к тест-проекту прописан.
 
 **2. Покрытие считается только по слоям, которые эти тесты проверяют.** На
-стенде вышло 4.44%, потому что в знаменатель попадали все связанные сборки.
-Добавлен фильтр области сбора (`Include=[…Infrastructure]*,[…Application]*`),
-и цифра станет осмысленной. **Это единственное место, которое ещё не
-проходило живой прогон.** Если `dotnet test` заспорит о синтаксисе, уберите
-две последние строки `command:`, всё остальное продолжит работать.
+стенде выходило 4.44%, потому что в знаменатель попадали все связанные сборки.
+Добавлен фильтр области сбора (`Include=[…Infrastructure]*,[…Application]*`).
+Проверено на стенде 5 августа: стало 238 из 4307, то есть 5.53%.
 
 **3. Из манифеста убраны строки, которые ничего не делали.** Отчёт о снапшотах
 и каталог логов выглядели как собираемая диагностика, но Snapshooter пишет
@@ -81,8 +79,8 @@ python3 -m tdc validate --repo <checkout>                 # без контей�
 
 ```
 ##teamcity[importData type='mstest' path='…/tests/results/integration.trx']
-##teamcity[buildStatisticValue key='CodeCoverageL' value='4.44']   # 331/7447
-##teamcity[buildStatisticValue key='CodeCoverageB' value='1.91']   # 43/2248
+##teamcity[buildStatisticValue key='CodeCoverageL' value='5.53']   # 238/4307
+##teamcity[buildStatisticValue key='CodeCoverageB' value='1.38']   # 18/1300
 postgres_integration: passed (main service exit code 0)
 ```
 
