@@ -28,15 +28,14 @@ python3 -m tdc run --mode local --repo <repo_root> --config <name> \
 | разработчику компонента | **[docs/HOWTO.md](docs/HOWTO.md)** |
 | ему же, живой пример | [docs/case_dotnet_openide.md](docs/case_dotnet_openide.md) |
 | принимающему решение | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| при работе с контрактом | `docs/test_cfg.xsd` |
+| при работе с контрактом | `templates/test_cfg.xsd` |
 
 Показать, как это работает, ничего не настраивая:
 `./smoke/demo_from_template.sh`. Он копирует шаблон в пустой репозиторий,
 меняет одну строку и запускает боевой пускалкой.
 
 `templates/` это то, что копируют себе команды. `profiles/` это готовые
-профили, подготовленные для конкретных репозиториев. Схемы в `docs/in662_*.png`,
-рядом редактируемые `.excalidraw` и генераторы.
+профили, подготовленные для конкретных репозиториев. Схемы и генераторы в `schemes/`, черновики в `drafts/`.
 
 ## Тесты
 
