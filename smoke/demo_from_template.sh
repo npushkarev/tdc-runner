@@ -7,15 +7,16 @@
 # шаблон, заменяется одна строка (образ), и всё это запускается БОЕВОЙ пускалкой,
 # той самой, которой будет запускать TeamCity.
 #
-# Образ для показа притворяется dotnet: принимает те же аргументы, что стоят в
-# шаблоне, и пишет такие же отчёты. Поэтому команда в шаблоне не меняется.
+# Тесты настоящие: в образе лежит маленький .NET-проект, и внутри контейнера
+# работает настоящий dotnet test. Имена проекта и категории подобраны под
+# шаблон, поэтому команда в шаблоне не меняется вовсе.
 set -euo pipefail
 
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SELF/.." && pwd)"
 STACK="${1:-dotnet}"
-BASE_IMAGE="${DEMO_BASE_IMAGE:-proget.inc.elara.local/main/library/postgres:18.1}"
-DEMO_IMAGE="proget.inc.elara.local/demo/component-tests:1.0.0"
+BASE_IMAGE="${DEMO_BASE_IMAGE:-proget.inc.elara.local/main/library/dotnet:0.5.0}"
+DEMO_IMAGE="proget.inc.elara.local/demo/my-component-tests:1.0.0"
 
 step() { echo; echo "======== $1"; }
 fail() { echo "ПОКАЗ: не получилось. $1" >&2; exit 1; }
@@ -40,9 +41,9 @@ grep -rn "ЗАМЕНИТЬ" "$REPO/test_docker_config" | sed "s|$REPO/|   |" || 
 
 step "4. Заменяем образ на свой"
 echo "   в жизни здесь будет образ с вашими тестами из ProGet"
-echo "   для показа собираем заглушку, которая ведёт себя как dotnet"
+echo "   для показа собираем такой же образ из демо-проекта в smoke/demo_project"
 docker build -q --build-arg "BASE_IMAGE=$BASE_IMAGE" \
-    -t "$DEMO_IMAGE" "$SELF/demo_image" >/dev/null
+    -t "$DEMO_IMAGE" "$SELF/demo_project" >/dev/null
 CFG="$REPO/test_docker_config/post_commit/integration"
 sed -i.bak "s|image: .*|image: $DEMO_IMAGE|" "$CFG/docker-compose.yml"
 rm -f "$CFG/docker-compose.yml.bak"
@@ -53,6 +54,7 @@ step "5. Проверяем файлы. Контейнеры не поднима
 (cd "$ROOT" && python3 -m tdc validate --repo "$REPO") | sed 's/^/   /'
 
 step "6. Прогон боевой пускалкой, той же, что запустит TeamCity"
+echo "   внутри контейнера работает настоящий dotnet test"
 OUT="$WORK/out"
 set +e
 TDC_REPO="$REPO" TDC_SLOT=lin-x64 TDC_OUT="$OUT" TDC_BUILD_ID=demo1 \
