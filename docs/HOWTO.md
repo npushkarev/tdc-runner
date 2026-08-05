@@ -163,7 +163,7 @@ reports/integration/_infra/…     логи контейнеров
       - POSTGRES_PASSWORD
 
   postgres:
-    image: proget.inc.elara.local/FEED/postgres:18.1
+    image: proget.inc.elara.local/your-feed/postgres:18.1
     environment:
       - POSTGRES_USER
       - POSTGRES_PASSWORD

@@ -48,7 +48,7 @@ elara_openide_backend/
 
 | Где | Что |
 |---|---|
-| `docker-compose.yml`, `image:` | `<ФИД>` → фид ProGet, куда публикуется образ с тестами |
+| `docker-compose.yml`, `image:` | `your-feed` → фид ProGet, куда публикуется образ с тестами |
 
 Всё остальное рабочее.
 
@@ -60,7 +60,7 @@ elara_openide_backend/
 ```sh
 docker build \
   -f tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/postgres.Dockerfile \
-  -t proget.inc.elara.local/<ФИД>/openide-postgres-integration-tests:1.0.0 .
+  -t proget.inc.elara.local/your-feed/openide-postgres-integration-tests:1.0.0 .
 ```
 
 Сборке нужен `*.crt` в корне checkout'а — его забирает `COPY *.crt` из вашего

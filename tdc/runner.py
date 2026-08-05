@@ -18,6 +18,8 @@ load_config(config_dir: Path) -> Tuple[Optional[TestConfig], List[ValidationIssu
 
 run_config(cfg: TestConfig, ctx: RunContext, execute) -> RunResult
     Lifecycle per the contract (§3 steps 3.1-3.7):
+      0. Снести work/ и reports/<cfg> прошлого прогона: иначе отчёты
+         копятся и счётчики покрытия суммируются между запусками.
       1. envfile: parse .env.default, check_reserved, merge ci vars
          (TEST_* + BUILD_* injected values), render .env into a private
          WORK dir (ctx.output_root/"_work"/cfg.name), NOT into the checkout.
@@ -124,6 +126,13 @@ def load_config(config_dir):
 def run_config(cfg, ctx, execute):
     issues = []
     work = ctx.output_root / "_work" / cfg.name
+    # Каталоги предыдущего прогона сносим ДО начала. Иначе отчёты копятся:
+    # coverlet пишет в cobertura timestamp, поэтому файлы разных прогонов не
+    # совпадают побайтно, и счётчики покрытия складывались раз за разом
+    # (на стенде 331/7447 превратилось в 993/22341 за три запуска). Хуже:
+    # упавший прогон подбирал чужие отчёты и рапортовал успех сбора.
+    shutil.rmtree(str(work), ignore_errors=True)
+    shutil.rmtree(str(ctx.output_root / "reports" / cfg.name), ignore_errors=True)
     work.mkdir(parents=True, exist_ok=True)
 
     # 3.1: .env = .env.default + injected CI vars, rendered into work

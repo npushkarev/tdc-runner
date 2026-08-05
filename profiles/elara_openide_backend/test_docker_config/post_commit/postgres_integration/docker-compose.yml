@@ -13,9 +13,9 @@
 #                                последних ключа это чинят
 services:
   tests:
-    # ЗАМЕНИТЬ <ФИД>: фид ProGet, куда публикуется образ с тестами.
+    # ЗАМЕНИТЬ your-feed: фид ProGet, куда публикуется образ с тестами.
     # Тег держим в .env.default, чтобы поднимать версию одной строкой.
-    image: proget.inc.elara.local/<ФИД>/openide-postgres-integration-tests:${TESTS_IMAGE_TAG}
+    image: proget.inc.elara.local/your-feed/openide-postgres-integration-tests:${TESTS_IMAGE_TAG}
     depends_on:
       postgres:
         condition: service_healthy   # ждём готовности базы, а не старта контейнера

@@ -29,7 +29,11 @@ class FakeExecute(object):
     """Records commands; answers `compose ps -q` and `docker wait`."""
 
     def __init__(self, wait_stdout="0\n", wait_exc=None, up_rc=0,
-                 up_stderr=""):
+                 up_stderr="", on_up=None):
+        # on_up имитирует контейнер: он пишет отчёты во время прогона, а не до
+        # него — иначе фикстура расходится с реальностью (ядро чистит каталоги
+        # перед стартом).
+        self.on_up = on_up
         self.calls = []
         self.wait_stdout = wait_stdout
         self.wait_exc = wait_exc
@@ -46,6 +50,8 @@ class FakeExecute(object):
         if len(cmd) >= 3 and cmd[-3:-1] == ["ps", "-q"]:
             return _proc("cid123\n")
         if cmd[-2:] == ["up", "-d"]:
+            if self.on_up is not None and self.up_rc == 0:
+                self.on_up()
             return _proc(returncode=self.up_rc, stderr=self.up_stderr)
         if cmd[-3:] == ["logs", "--no-color", "-t"]:
             return _proc("LOGLINE\n")
@@ -149,14 +155,18 @@ class RunConfigTest(unittest.TestCase):
         self.import_data = import_patcher.start()
         self.addCleanup(import_patcher.stop)
 
+    def _execute(self, **kw):
+        """FakeExecute, который «пишет» отчёт в момент up, как контейнер."""
+        kw.setdefault("on_up", self._seed_report)
+        return FakeExecute(**kw)
+
     def _seed_report(self):
         report_dir = self.out / "_work" / "demo" / "output" / "junit"
-        report_dir.mkdir(parents=True)
+        report_dir.mkdir(parents=True, exist_ok=True)
         (report_dir / "r.xml").write_text("<testsuite/>", encoding="utf-8")
 
     def test_happy_path_command_order_and_passed(self):
-        self._seed_report()
-        execute = FakeExecute(wait_stdout="0\n")
+        execute = self._execute(wait_stdout="0\n")
         result = runner.run_config(self.cfg, self.ctx, execute)
         self.assertEqual(execute.verbs(),
                          ["pull", "up", "ps-q", "wait", "logs", "ps-a",
@@ -180,19 +190,36 @@ class RunConfigTest(unittest.TestCase):
         self.mocks["parse_env_file"].side_effect = [
             {"POSTGRES_USER": "test"}, {"POSTGRES_USER": "mine"}]
         self.ctx.mode = "local"
-        self._seed_report()
-        runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        runner.run_config(self.cfg, self.ctx, self._execute(wait_stdout="0\n"))
         # .env.default прочитан, затем перекрыт .env.local
         self.assertEqual(self.mocks["parse_env_file"].call_count, 2)
 
     def test_env_local_ignored_in_ci_with_a_warning(self):
         (self.cfg_dir / ".env.local").write_text("POSTGRES_USER=mine\n",
                                                  encoding="utf-8")
-        self._seed_report()
         result = runner.run_config(self.cfg, self.ctx,
-                                   FakeExecute(wait_stdout="0\n"))
+                                   self._execute(wait_stdout="0\n"))
         self.assertEqual(self.mocks["parse_env_file"].call_count, 1)
         self.assertIn("env.local_ignored", [i.code for i in result.issues])
+
+    def test_stale_reports_from_previous_run_are_wiped(self):
+        # На стенде: 331/7447 превратилось в 993/22341 за три прогона, а упавший
+        # прогон рапортовал покрытие из чужих файлов.
+        stale_work = self.out / "_work" / "demo" / "output" / "coverage"
+        stale_work.mkdir(parents=True)
+        (stale_work / "old.cobertura.xml").write_text(
+            '<coverage lines-covered="999" lines-valid="999"/>', encoding="utf-8")
+        stale_rep = self.out / "reports" / "demo" / "tests"
+        stale_rep.mkdir(parents=True)
+        (stale_rep / "old.trx").write_text("<TestRun/>", encoding="utf-8")
+
+        runner.run_config(self.cfg, self.ctx, self._execute(wait_stdout="0\n"))
+
+        self.assertFalse((stale_work / "old.cobertura.xml").exists())
+        self.assertFalse((stale_rep / "old.trx").exists())
+        # свежий отчёт при этом на месте
+        self.assertTrue((self.out / "reports" / "demo" / "tests" / "junit"
+                         / "r.xml").is_file())
 
     def test_up_failure_reports_the_reason(self):
         # "up failed (rc=1)" alone sends people digging; docker already said why
@@ -236,25 +263,26 @@ class RunConfigTest(unittest.TestCase):
         # container root runs under cap_drop: ALL -> no DAC_OVERRIDE, so a dir
         # owned by the (non-root) agent user must be world-writable or every
         # report is lost. Verified on the dev stand: touch -> Permission denied.
-        self._seed_report()
-        runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+        runner.run_config(self.cfg, self.ctx, self._execute(wait_stdout="0\n"))
         mode = (self.out / "_work" / "demo" / "output").stat().st_mode
         self.assertEqual(mode & 0o777, 0o777)
 
     def test_cobertura_reports_emit_build_statistics(self):
-        self._seed_report()
-        cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
-        cov_dir.mkdir(parents=True)
-        for name, covered in (("a.xml", 30), ("b.xml", 10)):
-            (cov_dir / name).write_text(
-                '<coverage lines-covered="%d" lines-valid="100" '
-                'branches-covered="5" branches-valid="20"/>' % covered,
-                encoding="utf-8")
+        def seed():
+            self._seed_report()
+            cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
+            cov_dir.mkdir(parents=True, exist_ok=True)
+            for name, covered in (("a.xml", 30), ("b.xml", 10)):
+                (cov_dir / name).write_text(
+                    '<coverage lines-covered="%d" lines-valid="100" '
+                    'branches-covered="5" branches-valid="20"/>' % covered,
+                    encoding="utf-8")
         self.cfg.reports.append(ReportSpec(type="coverage",
                                            format="cobertura",
                                            path="coverage/*.xml"))
         with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
-            runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+            runner.run_config(self.cfg, self.ctx,
+                              self._execute(wait_stdout="0\n", on_up=seed))
         emitted = {c[0][0]: c[0][1] for c in stat.call_args_list}
         # counters summed across files, percentage derived from the totals
         self.assertEqual(emitted["CodeCoverageAbsLCovered"], 40)
@@ -269,34 +297,38 @@ class RunConfigTest(unittest.TestCase):
         # VSTest writes the same report under results/<guid>/ and again into
         # the attachment dir; a wider glob catches both and used to double
         # every counter (seen with coverlet 8.0.1 on a real dotnet run).
-        self._seed_report()
         body = ('<coverage lines-covered="26" lines-valid="27" '
                 'branches-covered="5" branches-valid="10"/>')
-        for sub in ("guid", "_host_2026_08_03/In/host"):
-            d = self.out / "_work" / "demo" / "output" / "coverage" / sub
-            d.mkdir(parents=True)
-            (d / "coverage.cobertura.xml").write_text(body, encoding="utf-8")
+
+        def seed():
+            self._seed_report()
+            for sub in ("guid", "_host_2026_08_03/In/host"):
+                d = self.out / "_work" / "demo" / "output" / "coverage" / sub
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "coverage.cobertura.xml").write_text(body, encoding="utf-8")
         self.cfg.reports.append(ReportSpec(
             type="coverage", format="cobertura",
             path="coverage/**/coverage.cobertura.xml"))
         with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
-            runner.run_config(self.cfg, self.ctx, FakeExecute(wait_stdout="0\n"))
+            runner.run_config(self.cfg, self.ctx,
+                              self._execute(wait_stdout="0\n", on_up=seed))
         emitted = {c[0][0]: c[0][1] for c in stat.call_args_list}
         self.assertEqual(emitted["CodeCoverageAbsLCovered"], 26)  # not 52
         self.assertEqual(emitted["CodeCoverageAbsLTotal"], 27)
         self.assertEqual(emitted["CodeCoverageL"], 96.3)
 
     def test_malformed_cobertura_does_not_break_collection(self):
-        self._seed_report()
-        cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
-        cov_dir.mkdir(parents=True)
-        (cov_dir / "broken.xml").write_text("<coverage", encoding="utf-8")
+        def seed():
+            self._seed_report()
+            cov_dir = self.out / "_work" / "demo" / "output" / "coverage"
+            cov_dir.mkdir(parents=True, exist_ok=True)
+            (cov_dir / "broken.xml").write_text("<coverage", encoding="utf-8")
         self.cfg.reports.append(ReportSpec(type="coverage",
                                            format="cobertura",
                                            path="coverage/*.xml"))
         with mock.patch("tdc.runner.teamcity.build_statistic") as stat:
             result = runner.run_config(self.cfg, self.ctx,
-                                       FakeExecute(wait_stdout="0\n"))
+                                       self._execute(wait_stdout="0\n", on_up=seed))
         self.assertEqual(result.status, PASSED)
         stat.assert_not_called()
         self.assertTrue((self.out / "reports" / "demo" / "coverage"
