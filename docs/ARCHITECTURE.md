@@ -65,6 +65,54 @@ test_docker_config/post_commit/<имя набора>/
 
 ![C · Поток](../schemes/in662_arch_flow.png)
 
+Тот же путь текстом, сверху вниз, кто кого вызывает:
+
+```
+./run_local.sh postgres_integration --repo ~/elara_openide_backend
+ └─ run_local.sh                    переводит ключи в аргументы
+     └─ python3 -m tdc run --mode local ...            tdc/cli.py
+         ├─ composebin.resolve()     какой compose брать:
+         │                           TDC_COMPOSE_BIN -> vendor/compose -> плагин
+         └─ runner.run_config()      один прогон, строго по шагам
+             │
+             ├─ 0  снести _work/<набор> и reports/<набор> прошлого прогона
+             │
+             ├─ 1  envfile: .env.default (+ .env.local локально)
+             │         + служебные TEST_*/BUILD_*/VCS_*
+             │         -> _work/<набор>/.env
+             │
+             ├─ 2  composecheck.normalize_compose()  спросить docker, во что
+             │         развернулся ваш compose
+             │     composecheck.check_compose()      белый список
+             │     staging.validate_input_spec(), _check_secrets()
+             │         ошибка здесь = стоп, контейнеров ещё не было
+             │
+             ├─ 3  staging.stage_inputs()   что попадёт в /test/input
+             │     mkdir _work/<набор>/output 0777    это и есть /test/output
+             │
+             ├─ 4  overridegen.generate_override()   лимиты, cap_drop, своя
+             │         сеть, метка tc.in662, монтирование, имя проекта
+             │         -> _work/<набор>/docker-compose.harness.yml
+             │
+             ├─ 5  compose -f ваш.yml -f harness.yml pull
+             │     compose up -d                     ждёт healthcheck соседей
+             │     compose ps -q <main_service>       id главного контейнера
+             │     docker wait <id>                   его код возврата = вердикт
+             │
+             ├─ 6  _collect()  ВСЕГДА, и когда прошло, и когда упало
+             │         output -> reports/<набор>/ по маскам <outputs>
+             │         teamcity.import_data(), покрытие -> buildStatisticValue
+             │         compose logs/ps -> reports/<набор>/_infra/
+             │
+             └─ 7  compose down -v --remove-orphans
+                   sweep_orphans()  подмести чужие остатки по метке
+```
+
+На сервере верхние две строки другие, ниже всё то же самое: шаг билда зовёт
+`ci/run_tests.sh`, тот `python3 -m tdc run --mode ci`, а `runner.run_slot()`
+перебирает все наборы репозитория, подходящие слоту, и для каждого вызывает
+`run_config()`.
+
 Пояснения к шагам, которые обычно вызывают вопросы:
 
 **Шаг 2, «придирки».** Compose проверяется не по тексту файла, а по тому, во что
