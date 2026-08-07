@@ -34,11 +34,16 @@ cp -r profiles/elara_openide_backend/test_docker_config <checkout>/
 
 ```
 elara_openide_backend/
-    test_docker_config/post_commit/postgres_integration/
-        docker-compose.yml
-        .env.default
-        test_cfg.xml
+    test_docker_config/
+        README.md                          короткая статья для ревьюера
+        post_commit/postgres_integration/
+            docker-compose.yml
+            .env.default
+            test_cfg.xml
 ```
+
+Это и есть минимальный набор для первого коммита: четыре файла плюс строка
+`.tdc-out/` в `.gitignore`. Папку `all_tests` в первый заход не отдаём.
 
 Больше в репозитории ничего не меняется. Код тестов, `.csproj`, существующие
 `*-compose.yaml` в корне не трогаем.
