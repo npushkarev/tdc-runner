@@ -11,7 +11,9 @@
 # Docker.DotNet, а такие наборы пока не поддерживаются.
 services:
   tests:
-    image: proget.inc.elara.local/your-feed/openide-all-tests:${TESTS_IMAGE_TAG}
+    # Ссылка целиком лежит в .env.default. Образ у этого набора СВОЙ: собран из
+    # всего решения, а не из одного проекта.
+    image: ${TESTS_IMAGE}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,7 +41,7 @@ services:
       - /test/output/results
 
   postgres:
-    image: proget.inc.elara.local/main/library/postgres:18.1
+    image: ${POSTGRES_IMAGE}
     environment:
       - POSTGRES_USER
       - POSTGRES_PASSWORD

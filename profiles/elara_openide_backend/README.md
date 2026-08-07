@@ -70,7 +70,10 @@ elara_openide_backend/
 
 | Где | Что |
 |---|---|
-| `docker-compose.yml`, `image:` | `your-feed` → фид ProGet, куда публикуется образ с тестами |
+| `.env.default`, строка `TESTS_IMAGE` | `your-feed` → фид ProGet, куда публикуется образ с тестами |
+
+Ссылки на образы держим в `.env.default`, а не в compose. Реестр, фид, имя и
+версия правятся в одном месте, compose при этом не трогается.
 
 Всё остальное рабочее.
 
@@ -82,7 +85,7 @@ elara_openide_backend/
 ```sh
 docker build \
   -f tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/postgres.Dockerfile \
-  -t proget.inc.elara.local/your-feed/openide-postgres-integration-tests:1.0.0 .
+  -t proget.inc.elara.local/your-feed/openide-integration-tests:1.0.0 .
 ```
 
 Сборке нужен `*.crt` в корне checkout'а: его забирает `COPY *.crt` из вашего

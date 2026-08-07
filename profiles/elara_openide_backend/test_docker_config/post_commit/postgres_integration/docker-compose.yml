@@ -13,9 +13,9 @@
 #                                последних ключа это чинят
 services:
   tests:
-    # ЗАМЕНИТЬ your-feed: фид ProGet, куда публикуется образ с тестами.
-    # Тег держим в .env.default, чтобы поднимать версию одной строкой.
-    image: proget.inc.elara.local/your-feed/openide-postgres-integration-tests:${TESTS_IMAGE_TAG}
+    # Ссылка целиком лежит в .env.default: реестр, фид, имя и версия меняются
+    # там, compose при этом не трогается.
+    image: ${TESTS_IMAGE}
     depends_on:
       postgres:
         condition: service_healthy   # ждём готовности базы, а не старта контейнера
@@ -53,7 +53,7 @@ services:
       - DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Include=[Elara.OpenIde.Backend.Infrastructure]*,[Elara.OpenIde.Backend.Application]*
 
   postgres:
-    image: proget.inc.elara.local/main/library/postgres:18.1
+    image: ${POSTGRES_IMAGE}
     environment:
       - POSTGRES_USER
       - POSTGRES_PASSWORD

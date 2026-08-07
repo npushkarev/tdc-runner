@@ -57,7 +57,7 @@ python3 -m tdc validate --repo <путь к checkout openide>      # без ко
 ```sh
 docker build \
   -f tests/Elara.OpenIde.Backend.Infrastructure.IntegrationTests/postgres.Dockerfile \
-  -t proget.inc.elara.local/<фид>/openide-postgres-integration-tests:1.0.0 .
+  -t proget.inc.elara.local/<фид>/openide-integration-tests:1.0.0 .
 ```
 
 Сборке нужен любой `*.crt` в корне checkout: его забирает `COPY *.crt` из
@@ -80,8 +80,11 @@ postgres_integration: passed (main service exit code 0)
 
 ## Что нужно заменить перед мержем
 
-`your-feed` в `docker-compose.yml` на фид ProGet, куда будет публиковаться образ
-с тестами. Фид заводим мы.
+`your-feed` в `.env.default`, строка `TESTS_IMAGE`. Это фид ProGet, куда будет
+публиковаться образ с тестами. Фид заводим мы.
+
+Ссылки на образы целиком лежат в `.env.default`, а не в compose: реестр, фид,
+имя и версия меняются в одном месте.
 
 ## Два вопроса к вам
 
