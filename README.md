@@ -25,7 +25,7 @@ python3 -m tdc run --mode local --repo <repo_root> --config <name> \
 
 | Кому | Что |
 |---|---|
-| разработчику компонента | **[docs/HOWTO.md](docs/HOWTO.md)** |
+| разработчику компонента | **[docs/confluence.md](docs/confluence.md)** — текст статьи для Confluence |
 | ему же, живой пример | [docs/case_dotnet_openide.md](docs/case_dotnet_openide.md) |
 | принимающему решение | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | при работе с контрактом | `templates/test_cfg.xsd` |
