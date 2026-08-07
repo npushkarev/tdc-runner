@@ -27,8 +27,8 @@ from . import (composebin, composecheck, envfile, overridegen, runner,
                slots, staging)
 from .model import (
     COMPOSE_FILE_NAME, CONFIG_DIR_ROOT, DEFAULT_REGISTRY_PREFIXES,
-    ENV_DEFAULT_NAME, TRIGGER_CLASSES, ConfigError, RunContext, RunResult,
-    Slot, TestConfig, PASSED, SKIPPED, ERROR,
+    ENV_DEFAULT_NAME, INFRA_REPORT_DIR, TRIGGER_CLASSES, ConfigError,
+    RunContext, RunResult, Slot, TestConfig, PASSED, SKIPPED, ERROR,
 )
 
 
@@ -121,6 +121,36 @@ def _cmd_validate(args):
     return 1 if failed else 0
 
 
+_COVERAGE_TITLES = {"lines": "строки", "branches": "ветви"}
+_COLLECTED_SHOWN = 8
+
+
+def _print_summary(summary):
+    """Итог словами: раньше в логе был только статус, а сколько тестов прошло
+    и куда легли файлы, приходилось выяснять по служебным сообщениям TC или
+    ходить по каталогам руками."""
+    if summary.tests is not None:
+        passed, failed, skipped = summary.tests
+        print("  тесты: %d прошло, %d упало, %d пропущено"
+              % (passed, failed, skipped))
+    if summary.coverage:
+        parts = ["%s %d/%d (%.2f%%)" % (_COVERAGE_TITLES.get(kind, kind),
+                                        covered, valid,
+                                        100.0 * covered / valid)
+                 for kind, covered, valid in summary.coverage if valid]
+        if parts:
+            print("  покрытие: %s" % ", ".join(parts))
+    if not summary.reports_dir:
+        return
+    print("  отчёты: %s" % summary.reports_dir)
+    for rel in summary.collected[:_COLLECTED_SHOWN]:
+        print("    %s" % rel)
+    extra = len(summary.collected) - _COLLECTED_SHOWN
+    if extra > 0:
+        print("    и ещё %d файл(ов)" % extra)
+    print("    %s/ — логи контейнеров и вывод compose" % INFRA_REPORT_DIR)
+
+
 def _cmd_run(args):
     try:
         slot = slots.parse_slot(args.slot)
@@ -184,6 +214,7 @@ def _cmd_run(args):
     for res in results:
         suffix = " (%s)" % res.details if res.details else ""
         print("%s: %s%s" % (res.config_name, res.status, suffix))
+        _print_summary(res.summary)
         for issue in res.issues:
             print("  %s" % issue)
     bad = [r for r in results if r.status not in (PASSED, SKIPPED)]

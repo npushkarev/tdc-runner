@@ -173,11 +173,23 @@ PASSED, FAILED, SKIPPED, ERROR = "passed", "failed", "skipped", "error"
 
 
 @dataclass
+class RunSummary:
+    """Итог прогона человеческими словами: куда легли отчёты, сколько тестов
+    прошло, какое покрытие. Служебные сообщения TC несут то же самое, но
+    читать их глазами в логе локального запуска невозможно."""
+    reports_dir: str = ""
+    collected: List[str] = field(default_factory=list)   # пути внутри reports_dir
+    tests: Optional[Tuple[int, int, int]] = None         # прошло, упало, пропущено
+    coverage: List[Tuple[str, int, int]] = field(default_factory=list)
+
+
+@dataclass
 class RunResult:
     config_name: str
     status: str                      # passed | failed | skipped | error
     details: str = ""
     issues: List[ValidationIssue] = field(default_factory=list)
+    summary: RunSummary = field(default_factory=RunSummary)
 
 
 @dataclass

@@ -77,7 +77,7 @@ from .model import (
     CONFIG_DIR_ROOT, CONFIG_NAME_RE, COMPOSE_FILE_NAME, ENV_DEFAULT_NAME,
     ENV_LOCAL_NAME, SECRET_NAME_RE,
     HARNESS_LABEL, INFRA_REPORT_DIR, TEST_CFG_NAME, ConfigError, RunResult,
-    ValidationIssue, PASSED, FAILED, SKIPPED, ERROR,
+    RunSummary, ValidationIssue, PASSED, FAILED, SKIPPED, ERROR,
 )
 from . import composecheck, envfile, overridegen, staging, teamcity, xmlcfg
 
@@ -244,11 +244,11 @@ def run_config(cfg, ctx, execute):
     finally:
         # 3.6-3.7: evidence before teardown, teardown no matter what
         try:
-            status = _collect(cfg, ctx, base, execute, output_dir, issues,
-                              status)
+            status, summary = _collect(cfg, ctx, base, execute, output_dir,
+                                       issues, status)
         finally:
             execute(base + ["down", "-v", "--remove-orphans"])
-    return RunResult(cfg.name, status, details, issues=issues)
+    return RunResult(cfg.name, status, details, issues=issues, summary=summary)
 
 
 def _check_secrets(cfg, ctx):
@@ -303,7 +303,9 @@ def _write_infra_text(ctx, cfg, name, *chunks):
 def _collect(cfg, ctx, base, execute, output_dir, issues, status):
     """Reports + infra diagnostics into ctx.output_root/reports/<cfg.name>/."""
     reports_root = ctx.output_root / "reports" / cfg.name
+    summary = RunSummary(reports_dir=str(reports_root))
     coverage_files = []
+    test_files = []
     for spec in cfg.reports:
         matches = sorted(p for p in output_dir.glob(spec.path) if p.is_file())
         if not matches and not spec.optional:
@@ -318,13 +320,17 @@ def _collect(cfg, ctx, base, execute, output_dir, issues, status):
             dest = reports_root / spec.type / src.relative_to(output_dir)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(src), str(dest))
+            summary.collected.append(str(dest.relative_to(reports_root)))
             if spec.format == "junit":
                 teamcity.import_data("junit", str(dest))
+                test_files.append((dest, "junit"))
             elif spec.format == "trx":
                 teamcity.import_data("mstest", str(dest))
+                test_files.append((dest, "trx"))
             elif spec.format == "cobertura":
                 coverage_files.append(dest)
-    _emit_coverage_stats(coverage_files)
+    summary.coverage = _emit_coverage_stats(coverage_files)
+    summary.tests = _test_counts(test_files)
     for spec in cfg.out_artifacts:
         matches = sorted(p for p in output_dir.glob(spec.path) if p.is_file())
         if not matches and not spec.optional:
@@ -339,6 +345,7 @@ def _collect(cfg, ctx, base, execute, output_dir, issues, status):
             dest = reports_root / "artifacts" / src.relative_to(output_dir)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(src), str(dest))
+            summary.collected.append(str(dest.relative_to(reports_root)))
     infra = reports_root / INFRA_REPORT_DIR
     infra.mkdir(parents=True, exist_ok=True)
     logs = execute(base + ["logs", "--no-color", "-t"])
@@ -346,7 +353,7 @@ def _collect(cfg, ctx, base, execute, output_dir, issues, status):
                                             encoding="utf-8")
     ps = execute(base + ["ps", "-a"])
     (infra / "compose-ps.txt").write_text(ps.stdout or "", encoding="utf-8")
-    return status
+    return status, summary
 
 
 _COVERAGE_STATS = (("lines", "L"), ("branches", "B"))
@@ -385,7 +392,8 @@ def _emit_coverage_stats(paths):
             totals[kind][1] += valid
             seen = True
     if not seen:
-        return
+        return []
+    stats = []
     for kind, suffix in _COVERAGE_STATS:
         covered, valid = totals[kind]
         if not valid:
@@ -394,6 +402,72 @@ def _emit_coverage_stats(paths):
         teamcity.build_statistic("CodeCoverageAbs%sTotal" % suffix, valid)
         teamcity.build_statistic("CodeCoverage%s" % suffix,
                                  round(100.0 * covered / valid, 2))
+        stats.append((kind, covered, valid))
+    return stats
+
+
+_TRX_NS = "{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}"
+
+
+def _trx_counts(root):
+    node = root.find("%sResultSummary/%sCounters" % (_TRX_NS, _TRX_NS))
+    if node is None:
+        return None
+    def num(name):
+        try:
+            return int(node.get(name) or 0)
+        except ValueError:
+            return 0
+    # notExecuted это и пропуски по фильтру, и [Skip]: для сводки одно и то же
+    return (num("passed"), num("failed") + num("error"), num("notExecuted"))
+
+
+def _junit_counts(root):
+    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+    total = failed = skipped = 0
+    for suite in suites:
+        def num(name):
+            try:
+                return int(suite.get(name) or 0)
+            except ValueError:
+                return 0
+        total += num("tests")
+        failed += num("failures") + num("errors")
+        skipped += num("skipped")
+    if not total:
+        return None
+    return (total - failed - skipped, failed, skipped)
+
+
+def _test_counts(paths):
+    """(прошло, упало, пропущено) по отчётам, None если ни один не разобран.
+
+    Файлы дедуплицируются по содержимому: VSTest кладёт копию отчёта в каталог
+    вложений, и без этого счётчики удваивались бы — та же грабля, что с
+    покрытием.
+    """
+    totals = [0, 0, 0]
+    seen = False
+    digests = set()
+    for path, fmt in paths:
+        try:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        if digest in digests:
+            continue
+        digests.add(digest)
+        try:
+            root = ElementTree.parse(str(path)).getroot()
+        except (ElementTree.ParseError, OSError):
+            continue
+        counts = _trx_counts(root) if fmt == "trx" else _junit_counts(root)
+        if counts is None:
+            continue
+        seen = True
+        for i, value in enumerate(counts):
+            totals[i] += value
+    return tuple(totals) if seen else None
 
 
 def sweep_orphans(execute, docker_bin):

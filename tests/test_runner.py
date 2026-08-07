@@ -317,6 +317,53 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual(emitted["CodeCoverageAbsLTotal"], 27)
         self.assertEqual(emitted["CodeCoverageL"], 96.3)
 
+    def test_summary_carries_counts_and_paths(self):
+        # без этого прогон печатал один статус: сколько тестов прошло и куда
+        # легли файлы, приходилось искать по служебным сообщениям TC
+        def seed():
+            report_dir = self.out / "_work" / "demo" / "output" / "junit"
+            report_dir.mkdir(parents=True, exist_ok=True)
+            (report_dir / "r.xml").write_text(
+                '<testsuite tests="7" failures="1" errors="0" skipped="2"/>',
+                encoding="utf-8")
+        result = runner.run_config(self.cfg, self.ctx,
+                                   self._execute(wait_stdout="0\n", on_up=seed))
+        self.assertEqual(result.summary.tests, (4, 1, 2))
+        self.assertEqual(result.summary.collected, ["tests/junit/r.xml"])
+        self.assertTrue(result.summary.reports_dir.endswith("reports/demo"))
+
+    def test_trx_summary_counts_and_duplicates(self):
+        # trx: счётчики лежат в сводке, а не в перечне тестов. Копия отчёта в
+        # каталоге вложений не должна удваивать цифры
+        body = ('<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/'
+                'TeamTest/2010"><ResultSummary><Counters passed="7" failed="0"'
+                ' error="0" notExecuted="3"/></ResultSummary></TestRun>')
+
+        def seed():
+            for sub in ("guid", "_host_2026_08_07/In/host"):
+                d = self.out / "_work" / "demo" / "output" / "results" / sub
+                d.mkdir(parents=True, exist_ok=True)
+                (d / "integration.trx").write_text(body, encoding="utf-8")
+        self.cfg.reports = [ReportSpec(type="tests", format="trx",
+                                       path="results/**/*.trx")]
+        result = runner.run_config(self.cfg, self.ctx,
+                                   self._execute(wait_stdout="0\n", on_up=seed))
+        self.assertEqual(result.summary.tests, (7, 0, 3))
+
+    def test_malformed_trx_leaves_summary_without_counts(self):
+        def seed():
+            d = self.out / "_work" / "demo" / "output" / "results"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "integration.trx").write_text("<TestRun", encoding="utf-8")
+        self.cfg.reports = [ReportSpec(type="tests", format="trx",
+                                       path="results/*.trx")]
+        result = runner.run_config(self.cfg, self.ctx,
+                                   self._execute(wait_stdout="0\n", on_up=seed))
+        self.assertEqual(result.status, PASSED)
+        self.assertIsNone(result.summary.tests)
+        self.assertEqual(result.summary.collected,
+                         ["tests/results/integration.trx"])
+
     def test_malformed_cobertura_does_not_break_collection(self):
         def seed():
             self._seed_report()
